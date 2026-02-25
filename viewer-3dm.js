@@ -1,8 +1,8 @@
 // viewer-3dm.js – Rhino .3dm viewer using Rhino3dmLoader and CDN
 
-import * as THREE from "https://unpkg.com/three@0.161.0/build/three.module.js";
-import { OrbitControls } from "https://unpkg.com/three@0.161.0/examples/jsm/controls/OrbitControls.js";
-import { Rhino3dmLoader } from "https://unpkg.com/three@0.161.0/examples/jsm/loaders/3DMLoader.js";
+import * as THREE from "three";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { Rhino3dmLoader } from "three/addons/loaders/3DMLoader.js";
 
 let scene, renderer;
 let orbitCamera, freeCamera, activeCamera;
