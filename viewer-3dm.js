@@ -42,109 +42,99 @@
         return new THREE.LineBasicMaterial({ color: 0x88aaff });
     }
 
-    // Port logic from Three.js 3DMLoader's worker decodeObjects function
-    function convertRhinoObject(obj, rhino) {
-        const geom = obj.geometry();
-        const objType = geom.objectType;
-        const typeName = objType && objType.constructor ? objType.constructor.name : 'Unknown';
-        
-        console.log('Object type:', typeName);
+    // Robust conversion: tries every known strategy on every object
+    function rhinoGeomToThreeObjs(geom, rhino) {
+        const results = [];
 
-        const loader = new THREE.BufferGeometryLoader();
-        let geometry = null;
-
-        try {
-            // Mesh or PointSet — direct toThreejsJSON
-            if (typeName === 'ObjectType_Mesh' || typeName === 'ObjectType_PointSet') {
-                geometry = loader.parse(JSON.parse(geom.toThreejsJSON()));
-                const mesh = new THREE.Mesh(geometry, makeMeshMat());
-                return [mesh];
-            }
-
-            // Brep — iterate faces and combine meshes
-            if (typeName === 'ObjectType_Brep') {
-                const faces = geom.faces();
-                const combinedMesh = new rhino.Mesh();
-                for (let i = 0; i < faces.count; i++) {
-                    const face = faces.get(i);
-                    const faceMesh = face.getMesh(rhino.MeshType.Any);
-                    if (faceMesh) {
-                        combinedMesh.append(faceMesh);
-                        faceMesh.delete();
-                    }
-                    face.delete();
-                }
-                faces.delete();
-                if (combinedMesh.faces().count > 0) {
-                    combinedMesh.compact();
-                    geometry = loader.parse(JSON.parse(combinedMesh.toThreejsJSON()));
-                    combinedMesh.delete();
-                    const mesh = new THREE.Mesh(geometry, makeMeshMat());
-                    return [mesh];
-                }
-                combinedMesh.delete();
-            }
-
-            // Extrusion — getMesh
-            if (typeName === 'ObjectType_Extrusion') {
-                const extMesh = geom.getMesh(rhino.MeshType.Any);
-                if (extMesh) {
-                    geometry = loader.parse(JSON.parse(extMesh.toThreejsJSON()));
-                    extMesh.delete();
-                    const mesh = new THREE.Mesh(geometry, makeMeshMat());
-                    return [mesh];
-                }
-            }
-
-            // SubD — subdivide + createFromSubDControlNet
-            if (typeName === 'ObjectType_SubD') {
-                geom.subdivide(3);
-                const subDMesh = rhino.Mesh.createFromSubDControlNet(geom);
-                if (subDMesh) {
-                    geometry = loader.parse(JSON.parse(subDMesh.toThreejsJSON()));
-                    subDMesh.delete();
-                    const mesh = new THREE.Mesh(geometry, makeMeshMat());
-                    return [mesh];
-                }
-            }
-
-            // Curve — sample points
-            if (typeName === 'ObjectType_Curve') {
-                const pts = [];
-                const domain = geom.domain;
-                if (domain) {
-                    const steps = 80;
-                    const t0 = domain[0], t1 = domain[1];
-                    for (let s = 0; s <= steps; s++) {
-                        const t = t0 + (t1 - t0) * (s / steps);
-                        const pt = geom.pointAt(t);
-                        if (pt) pts.push(new THREE.Vector3(pt[0], pt[1], pt[2]));
+        // --- Strategy 1: toThreejsJSON (works for Mesh natively) ---
+        if (typeof geom.toThreejsJSON === 'function') {
+            try {
+                const json = geom.toThreejsJSON();
+                const parsed = (typeof json === 'string') ? JSON.parse(json) : json;
+                if (parsed && parsed.data && parsed.data.attributes) {
+                    const loader = new THREE.BufferGeometryLoader();
+                    const geo = loader.parse(parsed);
+                    if (geo) {
+                        results.push(new THREE.Mesh(geo, makeMeshMat()));
+                        return results;
                     }
                 }
-                if (pts.length >= 2) {
-                    const lineGeom = new THREE.BufferGeometry().setFromPoints(pts);
-                    const line = new THREE.Line(lineGeom, makeLineMat());
-                    return [line];
-                }
+            } catch(e) {
+                console.warn('toThreejsJSON failed:', e.message);
             }
-
-            // Point — single point
-            if (typeName === 'ObjectType_Point') {
-                const pt = geom.location;
-                if (pt) {
-                    const pointGeom = new THREE.BufferGeometry();
-                    pointGeom.setAttribute('position', new THREE.Float32BufferAttribute(pt, 3));
-                    const mat = new THREE.PointsMaterial({ color: 0xffaa00, size: 3, sizeAttenuation: false });
-                    const points = new THREE.Points(pointGeom, mat);
-                    return [points];
-                }
-            }
-
-        } catch (e) {
-            console.warn('Error converting', typeName, ':', e.message);
         }
 
-        return [];
+        // --- Strategy 2: getMesh with MeshType.Any (Brep, Extrusion, Surface) ---
+        if (typeof geom.getMesh === 'function') {
+            const meshTypes = [];
+            try { meshTypes.push(rhino.MeshType.Any); } catch(e) {}
+            try { meshTypes.push(rhino.MeshType.Default); } catch(e) {}
+            try { meshTypes.push(rhino.MeshType.Render); } catch(e) {}
+            // Also try numeric values used by rhino3dm
+            meshTypes.push(0, 1, 2, 3, 4);
+            for (let mi = 0; mi < meshTypes.length; mi++) {
+                try {
+                    const rm = geom.getMesh(meshTypes[mi]);
+                    if (rm && typeof rm.toThreejsJSON === 'function') {
+                        const json = rm.toThreejsJSON();
+                        const parsed = (typeof json === 'string') ? JSON.parse(json) : json;
+                        if (parsed && parsed.data && parsed.data.attributes) {
+                            const loader = new THREE.BufferGeometryLoader();
+                            const geo = loader.parse(parsed);
+                            if (geo) {
+                                results.push(new THREE.Mesh(geo, makeMeshMat()));
+                                rm.delete();
+                                return results;
+                            }
+                        }
+                        try { rm.delete(); } catch(e) {}
+                    }
+                } catch(e) {}
+            }
+        }
+
+        // --- Strategy 3: Curve sampling via domain + pointAt ---
+        if (typeof geom.domain !== 'undefined' && typeof geom.pointAt === 'function') {
+            try {
+                const domain = geom.domain;
+                const t0 = (domain && typeof domain.min !== 'undefined') ? domain.min : 0;
+                const t1 = (domain && typeof domain.max !== 'undefined') ? domain.max : 1;
+                if (t1 > t0) {
+                    const pts = [];
+                    const steps = 80;
+                    for (let s = 0; s <= steps; s++) {
+                        const t = t0 + (t1 - t0) * (s / steps);
+                        try {
+                            const pt = geom.pointAt(t);
+                            if (pt && pt.length >= 3) pts.push(new THREE.Vector3(pt[0], pt[1], pt[2]));
+                        } catch(e) {}
+                    }
+                    if (pts.length >= 2) {
+                        const geo = new THREE.BufferGeometry().setFromPoints(pts);
+                        results.push(new THREE.Line(geo, makeLineMat()));
+                        return results;
+                    }
+                }
+            } catch(e) {
+                console.warn('Curve sampling failed:', e.message);
+            }
+        }
+
+        // --- Strategy 4: PointCloud / single point ---
+        if (typeof geom.location !== 'undefined') {
+            try {
+                const loc = geom.location;
+                if (loc && loc.length >= 3) {
+                    const geo = new THREE.BufferGeometry();
+                    geo.setAttribute('position', new THREE.Float32BufferAttribute([loc[0], loc[1], loc[2]], 3));
+                    const mat = new THREE.PointsMaterial({ color: 0xffaa00, size: 0.5 });
+                    results.push(new THREE.Points(geo, mat));
+                    return results;
+                }
+            } catch(e) {}
+        }
+
+        return results;
     }
 
     function loadModel() {
@@ -168,18 +158,18 @@
                     try {
                         const obj = objs.get(i);
                         if (!obj) continue;
-                        const threeObjs = convertRhinoObject(obj, rhino);
-                        threeObjs.forEach(function(o) {
-                            o.visible = true; // Override layer visibility
-                            group.add(o);
-                        });
+                        const geom = obj.geometry();
+                        if (!geom) continue;
+                        console.log('Object', i, 'objectType:', geom.objectType);
+                        const threeObjs = rhinoGeomToThreeObjs(geom, rhino);
+                        threeObjs.forEach(function(o) { group.add(o); });
                     } catch (e2) {
                         console.warn('Skipping object ' + i + ':', e2.message);
                     }
                 }
 
                 doc.delete();
-                console.log('Rendered objects:', group.children.length, '/', total);
+                console.log('Group children:', group.children.length, '/', total);
 
                 if (group.children.length === 0) {
                     throw new Error('No renderable geometry found in model (' + total + ' objects parsed)');
