@@ -31,44 +31,82 @@
         if (el) el.textContent = isFree ? 'Free-Fly' : 'Orbit';
     }
 
-    function makeMeshMat(gl) {
+    function makeMeshMat() {
         return new THREE.MeshStandardMaterial({
-            color: gl ? 0x88b4e8 : 0xdddddd,
-            roughness: gl ? 0.1 : 0.65,
-            metalness: 0.05,
-            transparent: gl,
-            opacity: gl ? 0.3 : 1.0,
-            side: THREE.DoubleSide
+            color: 0xdddddd, roughness: 0.65, metalness: 0.05, side: THREE.DoubleSide
         });
     }
 
     function makeLineMat() {
-        return new THREE.LineBasicMaterial({ color: 0x88aaff, linewidth: 2 });
+        return new THREE.LineBasicMaterial({ color: 0x88aaff });
     }
 
-    // Convert a Rhino mesh to a Three.js Mesh using toThreejsJSON
-    function rhinoMeshToThreeObj(rhinoMesh, mat) {
-        const loader = new THREE.BufferGeometryLoader();
-        const json = JSON.parse(rhinoMesh.toThreejsJSON());
-        const geo = loader.parse(json);
-        return new THREE.Mesh(geo, mat);
-    }
+    // Try to extract a Three.js BufferGeometry from any rhino geometry object
+    function rhinoGeomToThreeObjs(geom, rhino) {
+        const results = [];
+        const type = geom.objectType;
 
-    // Convert a Rhino curve to a Three.js Line
-    function rhinoCurveToLine(rhinoCurve) {
-        // Sample points along the curve
-        const pts = [];
-        const domain = rhinoCurve.domain;
-        const steps = 64;
-        const t0 = domain.min, t1 = domain.max;
-        for (let s = 0; s <= steps; s++) {
-            const t = t0 + (t1 - t0) * (s / steps);
-            const pt = rhinoCurve.pointAt(t);
-            if (pt) pts.push(new THREE.Vector3(pt[0], pt[1], pt[2]));
+        // Try Mesh directly
+        if (type === rhino.ObjectType.Mesh) {
+            try {
+                const loader = new THREE.BufferGeometryLoader();
+                const geo = loader.parse(JSON.parse(geom.toThreejsJSON()));
+                results.push(new THREE.Mesh(geo, makeMeshMat()));
+                return results;
+            } catch(e) { console.warn('Mesh toThreejsJSON failed:', e.message); }
         }
-        if (pts.length < 2) return null;
-        const geo = new THREE.BufferGeometry().setFromPoints(pts);
-        return new THREE.Line(geo, makeLineMat());
+
+        // Try converting Brep/Extrusion to mesh first
+        if (type === rhino.ObjectType.Extrusion || type === rhino.ObjectType.Brep) {
+            try {
+                const rm = geom.getMesh(rhino.MeshType.Any);
+                if (rm) {
+                    const loader = new THREE.BufferGeometryLoader();
+                    const geo = loader.parse(JSON.parse(rm.toThreejsJSON()));
+                    results.push(new THREE.Mesh(geo, makeMeshMat()));
+                    rm.delete();
+                    return results;
+                }
+            } catch(e) { console.warn('Brep/Extrusion getMesh failed:', e.message); }
+        }
+
+        // Try Curve types: sample points and make lines
+        if (type === rhino.ObjectType.Curve ||
+            type === rhino.ObjectType.ArcCurve ||
+            type === rhino.ObjectType.LineCurve ||
+            type === rhino.ObjectType.NurbsCurve ||
+            type === rhino.ObjectType.PolylineCurve ||
+            type === rhino.ObjectType.PolyCurve) {
+            try {
+                const domain = geom.domain;
+                if (domain) {
+                    const pts = [], steps = 80;
+                    const t0 = domain.min, t1 = domain.max;
+                    for (let s = 0; s <= steps; s++) {
+                        const t = t0 + (t1 - t0) * (s / steps);
+                        const pt = geom.pointAt(t);
+                        if (pt) pts.push(new THREE.Vector3(pt[0], pt[1], pt[2]));
+                    }
+                    if (pts.length >= 2) {
+                        const geo = new THREE.BufferGeometry().setFromPoints(pts);
+                        results.push(new THREE.Line(geo, makeLineMat()));
+                        return results;
+                    }
+                }
+            } catch(e) { console.warn('Curve sampling failed:', e.message); }
+        }
+
+        // Last resort: call toThreejsJSON on any geometry type and hope it returns mesh data
+        if (typeof geom.toThreejsJSON === 'function') {
+            try {
+                const loader = new THREE.BufferGeometryLoader();
+                const parsed = JSON.parse(geom.toThreejsJSON());
+                const geo = loader.parse(parsed);
+                results.push(new THREE.Mesh(geo, makeMeshMat()));
+            } catch(e) { /* silent */ }
+        }
+
+        return results;
     }
 
     function loadModel() {
@@ -87,57 +125,25 @@
 
                 const group = new THREE.Group();
                 const objs = doc.objects();
-                let isGlassFn = function(obj) {
-                    let l = '';
-                    if (obj.userData && obj.userData.attributes && typeof obj.userData.attributes.layer === 'string')
-                        l = obj.userData.attributes.layer.toLowerCase();
-                    const n = (obj.name || '').toLowerCase();
-                    return ['glass','window','vidrio','cristal'].some(k => l.includes(k) || n.includes(k));
-                };
+                console.log('Object count:', objs.count);
 
                 for (let i = 0; i < objs.count; i++) {
                     try {
                         const obj = objs.get(i);
                         const geom = obj.geometry();
-                        const type = geom.objectType;
-                        const gl = isGlassFn(obj);
-
-                        if (type === rhino.ObjectType.Mesh) {
-                            group.add(rhinoMeshToThreeObj(geom, makeMeshMat(gl)));
-                        } else if (type === rhino.ObjectType.Extrusion || type === rhino.ObjectType.Brep) {
-                            const rm = geom.getMesh(rhino.MeshType.Any);
-                            if (rm) {
-                                group.add(rhinoMeshToThreeObj(rm, makeMeshMat(gl)));
-                                rm.delete();
-                            }
-                        } else if (type === rhino.ObjectType.Curve ||
-                                   type === rhino.ObjectType.ArcCurve ||
-                                   type === rhino.ObjectType.LineCurve ||
-                                   type === rhino.ObjectType.NurbsCurve ||
-                                   type === rhino.ObjectType.PolylineCurve ||
-                                   type === rhino.ObjectType.PolyCurve) {
-                            const line = rhinoCurveToLine(geom);
-                            if (line) group.add(line);
-                        } else {
-                            // Try toThreejsJSON as generic fallback for any other type
-                            if (typeof geom.toThreejsJSON === 'function') {
-                                try {
-                                    const loader2 = new THREE.BufferGeometryLoader();
-                                    const json2 = JSON.parse(geom.toThreejsJSON());
-                                    const geo2 = loader2.parse(json2);
-                                    group.add(new THREE.Mesh(geo2, makeMeshMat(gl)));
-                                } catch(e3) { /* skip */ }
-                            }
-                        }
+                        console.log('Object', i, 'type:', geom.objectType);
+                        const threeObjs = rhinoGeomToThreeObjs(geom, rhino);
+                        threeObjs.forEach(function(o) { group.add(o); });
                     } catch (e2) {
                         console.warn('Skipping object ' + i + ':', e2.message);
                     }
                 }
 
                 doc.delete();
+                console.log('Group children:', group.children.length);
 
                 if (group.children.length === 0) {
-                    throw new Error('No displayable geometry found. The model may contain only unsupported object types.');
+                    throw new Error('No displayable geometry found (0 objects rendered out of ' + objs.count + ')');
                 }
 
                 scene.add(group);
@@ -193,7 +199,7 @@
         orbitControls.enableDamping = true;
 
         scene.add(new THREE.AmbientLight(0xffffff, 0.8));
-        const sun = new THREE.DirectionalLight(0xffffff, 0.7);
+        const sun = new THREE.DirectionalLight(0xffffff, 0.8);
         sun.position.set(1, 2, 3);
         scene.add(sun);
         const sun2 = new THREE.DirectionalLight(0x8899bb, 0.3);
