@@ -33,7 +33,8 @@
 
     function makeMeshMat() {
         return new THREE.MeshStandardMaterial({
-            color: 0xdddddd, roughness: 0.65, metalness: 0.05, side: THREE.DoubleSide
+            color: 0xdddddd, roughness: 0.65, metalness: 0.05,
+            side: THREE.DoubleSide
         });
     }
 
@@ -41,51 +42,72 @@
         return new THREE.LineBasicMaterial({ color: 0x88aaff });
     }
 
-    // Try to extract a Three.js BufferGeometry from any rhino geometry object
+    // Robust conversion: tries every known strategy on every object
     function rhinoGeomToThreeObjs(geom, rhino) {
         const results = [];
-        const type = geom.objectType;
 
-        // Try Mesh directly
-        if (type === rhino.ObjectType.Mesh) {
+        // --- Strategy 1: toThreejsJSON (works for Mesh natively) ---
+        if (typeof geom.toThreejsJSON === 'function') {
             try {
-                const loader = new THREE.BufferGeometryLoader();
-                const geo = loader.parse(JSON.parse(geom.toThreejsJSON()));
-                results.push(new THREE.Mesh(geo, makeMeshMat()));
-                return results;
-            } catch(e) { console.warn('Mesh toThreejsJSON failed:', e.message); }
-        }
-
-        // Try converting Brep/Extrusion to mesh first
-        if (type === rhino.ObjectType.Extrusion || type === rhino.ObjectType.Brep) {
-            try {
-                const rm = geom.getMesh(rhino.MeshType.Any);
-                if (rm) {
+                const json = geom.toThreejsJSON();
+                const parsed = (typeof json === 'string') ? JSON.parse(json) : json;
+                if (parsed && parsed.data && parsed.data.attributes) {
                     const loader = new THREE.BufferGeometryLoader();
-                    const geo = loader.parse(JSON.parse(rm.toThreejsJSON()));
-                    results.push(new THREE.Mesh(geo, makeMeshMat()));
-                    rm.delete();
-                    return results;
+                    const geo = loader.parse(parsed);
+                    if (geo) {
+                        results.push(new THREE.Mesh(geo, makeMeshMat()));
+                        return results;
+                    }
                 }
-            } catch(e) { console.warn('Brep/Extrusion getMesh failed:', e.message); }
+            } catch(e) {
+                console.warn('toThreejsJSON failed:', e.message);
+            }
         }
 
-        // Try Curve types: sample points and make lines
-        if (type === rhino.ObjectType.Curve ||
-            type === rhino.ObjectType.ArcCurve ||
-            type === rhino.ObjectType.LineCurve ||
-            type === rhino.ObjectType.NurbsCurve ||
-            type === rhino.ObjectType.PolylineCurve ||
-            type === rhino.ObjectType.PolyCurve) {
+        // --- Strategy 2: getMesh with MeshType.Any (Brep, Extrusion, Surface) ---
+        if (typeof geom.getMesh === 'function') {
+            const meshTypes = [];
+            try { meshTypes.push(rhino.MeshType.Any); } catch(e) {}
+            try { meshTypes.push(rhino.MeshType.Default); } catch(e) {}
+            try { meshTypes.push(rhino.MeshType.Render); } catch(e) {}
+            // Also try numeric values used by rhino3dm
+            meshTypes.push(0, 1, 2, 3, 4);
+            for (let mi = 0; mi < meshTypes.length; mi++) {
+                try {
+                    const rm = geom.getMesh(meshTypes[mi]);
+                    if (rm && typeof rm.toThreejsJSON === 'function') {
+                        const json = rm.toThreejsJSON();
+                        const parsed = (typeof json === 'string') ? JSON.parse(json) : json;
+                        if (parsed && parsed.data && parsed.data.attributes) {
+                            const loader = new THREE.BufferGeometryLoader();
+                            const geo = loader.parse(parsed);
+                            if (geo) {
+                                results.push(new THREE.Mesh(geo, makeMeshMat()));
+                                rm.delete();
+                                return results;
+                            }
+                        }
+                        try { rm.delete(); } catch(e) {}
+                    }
+                } catch(e) {}
+            }
+        }
+
+        // --- Strategy 3: Curve sampling via domain + pointAt ---
+        if (typeof geom.domain !== 'undefined' && typeof geom.pointAt === 'function') {
             try {
                 const domain = geom.domain;
-                if (domain) {
-                    const pts = [], steps = 80;
-                    const t0 = domain.min, t1 = domain.max;
+                const t0 = (domain && typeof domain.min !== 'undefined') ? domain.min : 0;
+                const t1 = (domain && typeof domain.max !== 'undefined') ? domain.max : 1;
+                if (t1 > t0) {
+                    const pts = [];
+                    const steps = 80;
                     for (let s = 0; s <= steps; s++) {
                         const t = t0 + (t1 - t0) * (s / steps);
-                        const pt = geom.pointAt(t);
-                        if (pt) pts.push(new THREE.Vector3(pt[0], pt[1], pt[2]));
+                        try {
+                            const pt = geom.pointAt(t);
+                            if (pt && pt.length >= 3) pts.push(new THREE.Vector3(pt[0], pt[1], pt[2]));
+                        } catch(e) {}
                     }
                     if (pts.length >= 2) {
                         const geo = new THREE.BufferGeometry().setFromPoints(pts);
@@ -93,17 +115,23 @@
                         return results;
                     }
                 }
-            } catch(e) { console.warn('Curve sampling failed:', e.message); }
+            } catch(e) {
+                console.warn('Curve sampling failed:', e.message);
+            }
         }
 
-        // Last resort: call toThreejsJSON on any geometry type and hope it returns mesh data
-        if (typeof geom.toThreejsJSON === 'function') {
+        // --- Strategy 4: PointCloud / single point ---
+        if (typeof geom.location !== 'undefined') {
             try {
-                const loader = new THREE.BufferGeometryLoader();
-                const parsed = JSON.parse(geom.toThreejsJSON());
-                const geo = loader.parse(parsed);
-                results.push(new THREE.Mesh(geo, makeMeshMat()));
-            } catch(e) { /* silent */ }
+                const loc = geom.location;
+                if (loc && loc.length >= 3) {
+                    const geo = new THREE.BufferGeometry();
+                    geo.setAttribute('position', new THREE.Float32BufferAttribute([loc[0], loc[1], loc[2]], 3));
+                    const mat = new THREE.PointsMaterial({ color: 0xffaa00, size: 0.5 });
+                    results.push(new THREE.Points(geo, mat));
+                    return results;
+                }
+            } catch(e) {}
         }
 
         return results;
@@ -112,26 +140,27 @@
     function loadModel() {
         const name = getModelFromQuery();
         showLoading('Downloading ' + name + '...');
-
         rhino3dm().then(async function(rhino) {
             try {
                 const res = await fetch('models/' + name);
                 if (!res.ok) throw new Error('HTTP ' + res.status + ': model not found');
                 const buf = await res.arrayBuffer();
-
                 showLoading('Parsing geometry...');
                 const doc = rhino.File3dm.fromByteArray(new Uint8Array(buf));
                 if (!doc) throw new Error('Could not parse Rhino document');
 
                 const group = new THREE.Group();
                 const objs = doc.objects();
-                console.log('Object count:', objs.count);
+                const total = objs.count;
+                console.log('Object count:', total);
 
-                for (let i = 0; i < objs.count; i++) {
+                for (let i = 0; i < total; i++) {
                     try {
                         const obj = objs.get(i);
+                        if (!obj) continue;
                         const geom = obj.geometry();
-                        console.log('Object', i, 'type:', geom.objectType);
+                        if (!geom) continue;
+                        console.log('Object', i, 'objectType:', geom.objectType);
                         const threeObjs = rhinoGeomToThreeObjs(geom, rhino);
                         threeObjs.forEach(function(o) { group.add(o); });
                     } catch (e2) {
@@ -140,10 +169,10 @@
                 }
 
                 doc.delete();
-                console.log('Group children:', group.children.length);
+                console.log('Group children:', group.children.length, '/', total);
 
                 if (group.children.length === 0) {
-                    throw new Error('No displayable geometry found (0 objects rendered out of ' + objs.count + ')');
+                    throw new Error('No renderable geometry found in model (' + total + ' objects parsed)');
                 }
 
                 scene.add(group);
@@ -173,7 +202,6 @@
                 freeCamera.updateProjectionMatrix();
 
                 hideLoading();
-
             } catch (e) {
                 console.error(e);
                 showLoading('Error: ' + e.message);
@@ -226,7 +254,11 @@
             }
             if (e.code === 'Space') e.preventDefault();
         });
-        window.addEventListener('keyup', function(e) { keys[e.code] = false; });
+
+        window.addEventListener('keyup', function(e) {
+            keys[e.code] = false;
+        });
+
         window.addEventListener('mousemove', function(e) {
             if (!freeMode || document.pointerLockElement !== renderer.domElement) return;
             yaw -= e.movementX * 0.002;
@@ -234,6 +266,7 @@
             pitch = Math.max(-Math.PI / 2 + 0.01, Math.min(Math.PI / 2 - 0.01, pitch));
             freeCamera.rotation.set(pitch, yaw, 0, 'YXZ');
         });
+
         renderer.domElement.addEventListener('click', function() {
             if (freeMode) renderer.domElement.requestPointerLock();
         });
@@ -244,7 +277,8 @@
             requestAnimationFrame(anim);
             if (freeMode) {
                 const f = new THREE.Vector3(), r = new THREE.Vector3();
-                freeCamera.getWorldDirection(f); f.y = 0; f.normalize();
+                freeCamera.getWorldDirection(f);
+                f.y = 0; f.normalize();
                 r.crossVectors(new THREE.Vector3(0, 1, 0), f).normalize();
                 const spd = 0.5;
                 if (keys['KeyW']) velocity.addScaledVector(f, spd);
