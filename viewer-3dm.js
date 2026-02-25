@@ -42,6 +42,7 @@ function updateModeUI() {
         document.querySelectorAll('.cam-btn').forEach(function(b) {
             b.classList.toggle('active', b.dataset.mode === cameraMode);
         });
+            document.dispatchEvent(new CustomEvent('modchange', { detail: cameraMode }));
     }
 
     function setCameraMode(mode) {
