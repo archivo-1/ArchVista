@@ -150,6 +150,9 @@
                 if (!doc) throw new Error('Could not parse Rhino document');
 
                 const group = new THREE.Group();
+
+                      // FIX ORIENTATION: Convert from Rhino's Z-up to THREE.js Y-up
+                      group.rotation.x = -Math.PI / 2;
                 const objs = doc.objects();
                 const total = objs.count;
                 console.log('Object count:', total);
