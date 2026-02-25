@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>3D Viewer – Rhino .3dm</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      overflow: hidden;
+      background: #050608;
+      color: #f5f5f5;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    #overlay {
+      position: fixed;
+      top: 10px;
+      left: 10px;
+      padding: 0.5rem 0.75rem;
+      background: rgba(5, 6, 8, 0.72);
+      border-radius: 6px;
+      font-size: 0.8rem;
+      max-width: 320px;
+      border: 1px solid rgba(255,255,255,0.08);
+      pointer-events: none;
+    }
+    #overlay h1 {
+      margin: 0 0 0.25rem 0;
+      font-size: 0.9rem;
+    }
+    #overlay p {
+      margin: 0.1rem 0;
+      color: #c2c4cf;
+    }
+    #back-btn {
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      padding: 0.4rem 0.75rem;
+      font-size: 0.8rem;
+      background: rgba(12, 15, 25, 0.85);
+      color: #f5f5f5;
+      border-radius: 6px;
+      cursor: pointer;
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+    #back-btn:hover {
+      background: rgba(20, 24, 40, 0.95);
+    }
+    canvas {
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <div id="overlay">
+    <h1>3D Viewer (.3dm)</h1>
+    <p><strong>Controls</strong></p>
+    <p>F: toggle Orbit / Free‑Fly</p>
+    <p>WASD + mouse: move in Free‑Fly (click to lock cursor)</p>
+    <p>Scroll: zoom (Orbit)</p>
+    <p>Right‑click + drag: pan (Orbit)</p>
+    <p>Esc: release mouse lock</p>
+  </div>
+  <button id="back-btn" onclick="window.location.href='index.html'">&larr; Back to Library</button>
+
+  <script type="module" src="viewer-3dm.js"></script>
+</body>
+</html>
