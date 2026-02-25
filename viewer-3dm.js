@@ -15,9 +15,12 @@
         return params.get('model') || 'torpederas-valparaisoCLS.3dm';
     }
 
-    function showLoading() {
+    function showLoading(msg) {
         const el = document.getElementById('loading');
-        if (el) el.classList.remove('hidden');
+        if (el) {
+            el.classList.remove('hidden');
+            if (msg) el.querySelector('p').textContent = msg;
+        }
     }
 
     function hideLoading() {
@@ -39,13 +42,9 @@
         if (!layerName && typeof obj.userData.layer === 'string') {
             layerName = obj.userData.layer.toLowerCase();
         }
-        
         const name = (obj.name || '').toLowerCase();
         const keywords = ['glass', 'window', 'vidrio', 'cristal'];
-        for (let k of keywords) {
-            if (layerName.indexOf(k) !== -1 || name.indexOf(k) !== -1) return true;
-        }
-        return false;
+        return keywords.some(k => layerName.includes(k) || name.includes(k));
     }
 
     function rhinoMeshToBuffer(rhinoMesh) {
@@ -90,39 +89,41 @@
     }
 
     function makeMat(isGl) {
-        if (isGl) {
-            return new THREE.MeshStandardMaterial({
-                color: 0x88b4e8,
-                roughness: 0.05,
-                metalness: 0,
-                transparent: true,
-                opacity: 0.32,
-                side: THREE.DoubleSide
-            });
-        }
         return new THREE.MeshStandardMaterial({
-            color: 0xf0f0f0,
-            roughness: 0.55,
-            metalness: 0.05,
+            color: isGl ? 0x88b4e8 : 0xf0f0f0,
+            roughness: isGl ? 0.05 : 0.55,
+            metalness: isGl ? 0 : 0.05,
+            transparent: isGl,
+            opacity: isGl ? 0.32 : 1,
             side: THREE.DoubleSide
         });
     }
 
     function loadModel() {
-        const file = 'models/' + getModelFromQuery();
-        showLoading();
+        const modelName = getModelFromQuery();
+        const file = 'models/' + modelName;
+        console.log('Fetching model:', file);
+        showLoading('Initializing Rhino3dm...');
+
+        if (typeof rhino3dm === 'undefined') {
+            showLoading('Error: rhino3dm library not loaded.');
+            return;
+        }
 
         rhino3dm().then(async rhino => {
+            console.log('Rhino3dm library initialized.');
+            showLoading('Downloading ' + modelName + '...');
             try {
                 const response = await fetch(file);
-                if (!response.ok) throw new Error('Model not found');
+                if (!response.ok) throw new Error('Model file not found (404)');
+                
                 const buffer = await response.arrayBuffer();
+                showLoading('Parsing geometry...');
                 const doc = rhino.File3dm.fromByteArray(new Uint8Array(buffer));
-                if (!doc) throw new Error('Failed to parse 3DM');
+                if (!doc) throw new Error('Could not parse Rhino document.');
 
                 const group = new THREE.Group();
                 const objects = doc.objects();
-                
                 for (let i = 0; i < objects.count; i++) {
                     const obj = objects.get(i);
                     const geometry = obj.geometry();
@@ -130,18 +131,11 @@
                     
                     if (geometry.objectType === rhino.ObjectType.Mesh) {
                         const bufferGeo = rhinoMeshToBuffer(geometry);
-                        const mesh = new THREE.Mesh(bufferGeo, makeMat(gl));
-                        mesh.castShadow = true;
-                        mesh.receiveShadow = true;
-                        group.add(mesh);
+                        group.add(new THREE.Mesh(bufferGeo, makeMat(gl)));
                     } else if (geometry.objectType === rhino.ObjectType.Extrusion || geometry.objectType === rhino.ObjectType.Brep) {
                         const rhinoMesh = geometry.getMesh(rhino.MeshType.Any);
                         if (rhinoMesh) {
-                            const bufferGeo = rhinoMeshToBuffer(rhinoMesh);
-                            const mesh = new THREE.Mesh(bufferGeo, makeMat(gl));
-                            mesh.castShadow = true;
-                            mesh.receiveShadow = true;
-                            group.add(mesh);
+                            group.add(new THREE.Mesh(rhinoMeshToBuffer(rhinoMesh), makeMat(gl)));
                             rhinoMesh.delete();
                         }
                     }
@@ -149,32 +143,35 @@
 
                 scene.add(group);
                 
+                // Center camera
                 const box = new THREE.Box3().setFromObject(group);
                 const center = new THREE.Vector3();
                 const size = new THREE.Vector3();
                 box.getCenter(center);
                 box.getSize(size);
-                
                 const maxDim = Math.max(size.x, size.y, size.z) || 10;
                 const dist = maxDim * 2.5;
-                
+
                 orbitCamera.position.set(center.x + dist, center.y + dist * 0.6, center.z + dist);
                 orbitCamera.lookAt(center);
                 orbitControls.target.copy(center);
                 orbitControls.update();
-                
+
                 freeCamera.position.set(center.x + maxDim * 0.6, center.y + maxDim * 0.4, center.z + maxDim * 0.9);
                 freeCamera.lookAt(center);
-                freeCamera.rotation.order = 'YXZ';
                 yaw = freeCamera.rotation.y;
                 pitch = freeCamera.rotation.x;
-                
+
                 doc.delete();
+                console.log('Model loaded successfully.');
                 hideLoading();
             } catch (err) {
                 console.error(err);
-                hideLoading();
+                showLoading('Error: ' + err.message);
             }
+        }).catch(err => {
+            console.error('Rhino3dm init error:', err);
+            showLoading('Error initializing Rhino3dm.');
         });
     }
 
@@ -192,42 +189,30 @@
             freeMode = !freeMode;
             activeCamera = freeMode ? freeCamera : orbitCamera;
             setModeLabel(freeMode);
-            if (!freeMode && document.pointerLockElement === renderer.domElement) {
-                document.exitPointerLock();
-            }
+            if (!freeMode && document.pointerLockElement === renderer.domElement) document.exitPointerLock();
             orbitControls.enabled = !freeMode;
         }
         if (e.code === 'Space') e.preventDefault();
     }
 
-    function onKeyUp(e) {
-        keys[e.code] = false;
-    }
+    function onKeyUp(e) { keys[e.code] = false; }
 
     function onMouseMove(e) {
         if (!freeMode || document.pointerLockElement !== renderer.domElement) return;
-        
         yaw -= e.movementX * 0.0022;
         pitch -= e.movementY * 0.0022;
-        
         const limit = Math.PI / 2 - 0.01;
         if (pitch > limit) pitch = limit;
         if (pitch < -limit) pitch = -limit;
-        
         freeCamera.rotation.set(pitch, yaw, 0, 'YXZ');
     }
 
     function updateFly(dt) {
         velocity.multiplyScalar(damping);
-        const forward = new THREE.Vector3();
-        const right = new THREE.Vector3();
-        
+        const forward = new THREE.Vector3(), right = new THREE.Vector3();
         freeCamera.getWorldDirection(forward);
-        forward.y = 0;
-        forward.normalize();
-        
-        right.crossVectors(THREE.Object3D.DEFAULT_UP, forward).normalize();
-        
+        forward.y = 0; forward.normalize();
+        right.crossVectors(THREE.Object3D.DefaultUp || new THREE.Vector3(0,1,0), forward).normalize();
         const s = moveSpeed * dt;
         if (keys['KeyW']) velocity.add(forward.multiplyScalar(s));
         if (keys['KeyS']) velocity.add(forward.multiplyScalar(-s));
@@ -235,7 +220,6 @@
         if (keys['KeyD']) velocity.add(right.multiplyScalar(-s));
         if (keys['KeySpace']) velocity.y += s;
         if (keys['ShiftLeft'] || keys['ShiftRight']) velocity.y -= s;
-        
         freeCamera.position.add(velocity);
     }
 
@@ -244,16 +228,16 @@
         const now = performance.now();
         const dt = (now - lastTime) / 1000;
         lastTime = now;
-
-        if (freeMode) {
-            updateFly(dt);
-        } else {
-            orbitControls.update();
-        }
+        if (freeMode) updateFly(dt);
+        else orbitControls.update();
         renderer.render(scene, activeCamera);
     }
 
     function init() {
+        if (typeof THREE === 'undefined') {
+            console.error('Three.js not loaded');
+            return;
+        }
         const w = window.innerWidth, h = window.innerHeight;
         scene = new THREE.Scene();
         scene.background = new THREE.Color(0x050608);
@@ -261,21 +245,25 @@
         renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
         renderer.setSize(w, h);
-        renderer.shadowMap.enabled = true;
         renderer.domElement.tabIndex = 1;
         document.body.appendChild(renderer.domElement);
 
         orbitCamera = new THREE.PerspectiveCamera(60, w / h, 0.1, 20000);
         freeCamera = new THREE.PerspectiveCamera(75, w / h, 0.1, 20000);
+        freeCamera.rotation.order = 'YXZ';
         activeCamera = orbitCamera;
 
+        if (typeof THREE.OrbitControls === 'undefined') {
+            console.error('OrbitControls not loaded');
+            showLoading('Error: OrbitControls not loaded.');
+            return;
+        }
         orbitControls = new THREE.OrbitControls(orbitCamera, renderer.domElement);
         orbitControls.enableDamping = true;
 
         scene.add(new THREE.HemisphereLight(0xffffff, 0x1a1a2e, 0.85));
         const sun = new THREE.DirectionalLight(0xfff4e0, 0.9);
         sun.position.set(100, 180, 80);
-        sun.castShadow = true;
         scene.add(sun);
 
         window.addEventListener('resize', onResize);
