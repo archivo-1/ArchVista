@@ -7,13 +7,15 @@
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
-      --bg:        #050608;
-      --surface:   #0d1117;
-      --border:    rgba(255,255,255,0.07);
-      --text:      #e5e7eb;
-      --muted:     #6b7280;
-      --accent:    #3b82f6;
-      --accent-dim:rgba(59,130,246,0.15);
+      --bg:         #050608;
+      --surface:    #0d1117;
+      --surface2:   #111520;
+      --border:     rgba(255,255,255,0.07);
+      --border2:    rgba(255,255,255,0.12);
+      --text:       #e5e7eb;
+      --muted:      #6b7280;
+      --accent:     #3b82f6;
+      --accent-dim: rgba(59,130,246,0.15);
     }
     body {
       font-family: system-ui, -apple-system, sans-serif;
@@ -23,167 +25,154 @@
       display: flex;
       flex-direction: column;
     }
-    /* ── Header ───────────────────────────────────────────── */
+
+    /* ── Header ───────────────────────────────────────── */
     header {
-      padding: 1.4rem 2rem;
+      padding: 1.2rem 2rem;
       border-bottom: 1px solid var(--border);
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 1rem;
+      gap: 1.5rem;
+      flex-wrap: wrap;
     }
-    .logo { display: flex; align-items: baseline; gap: 0.5rem; }
-    .logo h1 { font-size: 1.35rem; font-weight: 700; letter-spacing: -0.02em; color: #f9fafb; }
-    .logo span { font-size: 0.78rem; color: var(--muted); }
-    .search-wrap {
-      flex: 1; max-width: 360px;
-      position: relative;
-    }
+    .logo { display: flex; align-items: baseline; gap: 0.6rem; text-decoration: none; }
+    .logo h1 { font-size: 1.3rem; font-weight: 700; letter-spacing: -0.02em; color: #f9fafb; }
+    .logo span { font-size: 0.75rem; color: var(--muted); letter-spacing: 0.01em; }
+    .search-wrap { flex: 1; max-width: 380px; position: relative; }
     .search-wrap input {
-      width: 100%;
-      padding: 0.45rem 0.85rem 0.45rem 2.2rem;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      color: var(--text);
-      font-size: 0.82rem;
-      outline: none;
-      transition: border-color 0.15s;
+      width: 100%; padding: 0.45rem 0.85rem 0.45rem 2.2rem;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 8px; color: var(--text); font-size: 0.82rem;
+      outline: none; transition: border-color 0.15s;
     }
-    .search-wrap input:focus { border-color: rgba(59,130,246,0.5); }
+    .search-wrap input:focus { border-color: rgba(59,130,246,0.45); }
+    .search-wrap input::placeholder { color: var(--muted); }
     .search-wrap svg {
       position: absolute; left: 0.65rem; top: 50%; transform: translateY(-50%);
-      width: 14px; height: 14px; color: var(--muted); pointer-events: none;
+      width: 14px; height: 14px; stroke: var(--muted); fill: none;
+      pointer-events: none;
     }
-    /* ── Category tabs ────────────────────────────────────── */
+
+    /* ── Category tabs ─────────────────────────────────── */
     .filters {
-      padding: 0.9rem 2rem 0;
-      display: flex;
-      gap: 0.4rem;
-      flex-wrap: wrap;
+      padding: 0.75rem 2rem 0;
+      display: flex; gap: 0.35rem; flex-wrap: wrap;
       border-bottom: 1px solid var(--border);
     }
     .filter-btn {
-      padding: 0.35rem 0.85rem;
-      font-size: 0.78rem;
-      font-weight: 500;
-      background: transparent;
-      color: var(--muted);
-      border: 1px solid transparent;
-      border-radius: 20px;
-      cursor: pointer;
-      transition: all 0.12s;
-      margin-bottom: 0.9rem;
+      display: inline-flex; align-items: center; gap: 0.4rem;
+      padding: 0.32rem 0.8rem; margin-bottom: 0.75rem;
+      font-size: 0.78rem; font-weight: 500;
+      background: transparent; color: var(--muted);
+      border: 1px solid transparent; border-radius: 20px;
+      cursor: pointer; transition: all 0.12s; white-space: nowrap;
     }
-    .filter-btn:hover { color: var(--text); border-color: var(--border); }
+    .filter-btn:hover { color: var(--text); border-color: var(--border2); }
     .filter-btn.active {
-      background: var(--accent-dim);
-      color: #93c5fd;
+      background: var(--accent-dim); color: #93c5fd;
       border-color: rgba(59,130,246,0.3);
     }
-    /* ── Main grid ──────────────────────────────────────────── */
-    main {
-      flex: 1;
-      padding: 2rem;
-      max-width: 1200px;
-      width: 100%;
-      margin: 0 auto;
-    }
-    .grid-label {
-      font-size: 0.72rem;
+    .tab-count {
+      font-size: 0.65rem; font-weight: 600;
+      background: rgba(255,255,255,0.07);
       color: var(--muted);
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
+      padding: 0.1rem 0.42rem;
+      border-radius: 20px;
+      min-width: 1.4rem;
+      text-align: center;
+      transition: background 0.12s, color 0.12s;
+    }
+    .filter-btn.active .tab-count {
+      background: rgba(59,130,246,0.2); color: #93c5fd;
+    }
+
+    /* ── Main grid ─────────────────────────────────────── */
+    main { flex: 1; padding: 1.75rem 2rem; max-width: 1280px; width: 100%; margin: 0 auto; }
+    .grid-header {
+      display: flex; align-items: center; justify-content: space-between;
       margin-bottom: 1.2rem;
     }
+    .grid-label { font-size: 0.72rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
     .grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-      gap: 1.2rem;
+      grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
+      gap: 1.15rem;
     }
-    /* ── Card ───────────────────────────────────────────────── */
+
+    /* ── Card ──────────────────────────────────────────── */
     .card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      overflow: hidden;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; overflow: hidden;
+      display: flex; flex-direction: column;
       cursor: pointer;
       transition: border-color 0.15s, transform 0.15s, box-shadow 0.15s;
-      display: flex;
-      flex-direction: column;
     }
     .card:hover {
-      border-color: rgba(59,130,246,0.35);
+      border-color: rgba(59,130,246,0.4);
       transform: translateY(-2px);
-      box-shadow: 0 8px 32px rgba(0,0,0,0.35);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
     }
+    /* Thumbnail */
     .card-thumb {
       width: 100%; aspect-ratio: 16/9;
-      background: #0a0e18;
+      background: #080c14;
       display: flex; align-items: center; justify-content: center;
-      overflow: hidden;
-      position: relative;
+      overflow: hidden; position: relative;
     }
-    .card-thumb img { width: 100%; height: 100%; object-fit: cover; }
-    .card-thumb .no-thumb {
-      display: flex; flex-direction: column; align-items: center; gap: 0.5rem;
-      color: #2a3040;
+    .card-thumb img {
+      width: 100%; height: 100%; object-fit: cover;
+      display: block;
+      transition: transform 0.3s;
     }
-    .card-thumb .no-thumb svg { width: 36px; height: 36px; }
-    .card-thumb .no-thumb span { font-size: 0.65rem; letter-spacing: 0.05em; text-transform: uppercase; }
-    .card-body {
-      padding: 1rem;
-      display: flex; flex-direction: column; gap: 0.4rem;
-      flex: 1;
+    .card:hover .card-thumb img { transform: scale(1.03); }
+    .card-thumb .thumb-placeholder {
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 0.5rem; color: #1e2535; width: 100%; height: 100%;
     }
+    .card-thumb .thumb-placeholder svg { width: 40px; height: 40px; stroke: currentColor; fill: none; }
+    .card-thumb .thumb-placeholder span { font-size: 0.6rem; letter-spacing: 0.1em; text-transform: uppercase; }
+    /* Body */
+    .card-body { padding: 0.9rem 1rem; display: flex; flex-direction: column; gap: 0.45rem; flex: 1; }
     .card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.5rem; }
-    .card-title { font-size: 0.9rem; font-weight: 600; color: #f3f4f6; line-height: 1.3; flex: 1; }
+    .card-title { font-size: 0.88rem; font-weight: 600; color: #f1f3f5; line-height: 1.35; flex: 1; }
     .badge {
-      font-size: 0.62rem; font-weight: 500;
-      padding: 0.18rem 0.5rem;
-      border-radius: 20px;
-      white-space: nowrap;
-      flex-shrink: 0;
+      font-size: 0.6rem; font-weight: 600;
+      padding: 0.16rem 0.5rem; border-radius: 20px;
+      white-space: nowrap; flex-shrink: 0; letter-spacing: 0.02em;
     }
-    .badge-site    { background: rgba(16,185,129,0.15); color: #6ee7b7; border: 1px solid rgba(16,185,129,0.25); }
-    .badge-building{ background: rgba(139,92,246,0.15); color: #c4b5fd; border: 1px solid rgba(139,92,246,0.25); }
-    .badge-infra   { background: rgba(245,158,11,0.15); color: #fcd34d; border: 1px solid rgba(245,158,11,0.25); }
-    .badge-equip   { background: rgba(59,130,246,0.15); color: #93c5fd; border: 1px solid rgba(59,130,246,0.25); }
-    .badge-other   { background: rgba(107,114,128,0.15); color: #9ca3af; border: 1px solid rgba(107,114,128,0.25); }
-    .card-desc { font-size: 0.78rem; color: var(--muted); line-height: 1.5; }
-    .card-meta { font-size: 0.7rem; color: #374151; margin-top: auto; padding-top: 0.5rem; }
+    .badge-site     { background: rgba(16,185,129,0.14); color: #6ee7b7; border: 1px solid rgba(16,185,129,0.22); }
+    .badge-building { background: rgba(139,92,246,0.14); color: #c4b5fd; border: 1px solid rgba(139,92,246,0.22); }
+    .badge-infra    { background: rgba(245,158,11,0.14); color: #fcd34d; border: 1px solid rgba(245,158,11,0.22); }
+    .badge-equip    { background: rgba(59,130,246,0.14); color: #93c5fd; border: 1px solid rgba(59,130,246,0.22); }
+    .badge-other    { background: rgba(107,114,128,0.14); color: #9ca3af; border: 1px solid rgba(107,114,128,0.22); }
+    .card-desc { font-size: 0.77rem; color: var(--muted); line-height: 1.55; }
+    /* Footer */
     .card-footer {
-      padding: 0.75rem 1rem;
+      padding: 0.65rem 1rem;
       border-top: 1px solid var(--border);
       display: flex; align-items: center; justify-content: space-between;
     }
-    .card-size { font-size: 0.68rem; color: var(--muted); }
+    .card-size { font-size: 0.67rem; color: #374151; }
     .btn-view {
-      font-size: 0.75rem; font-weight: 500;
-      padding: 0.32rem 0.85rem;
-      background: var(--accent-dim);
-      color: #93c5fd;
-      border: 1px solid rgba(59,130,246,0.3);
-      border-radius: 6px;
-      cursor: pointer;
-      transition: background 0.12s;
+      font-size: 0.73rem; font-weight: 500;
+      padding: 0.3rem 0.8rem;
+      background: var(--accent-dim); color: #93c5fd;
+      border: 1px solid rgba(59,130,246,0.28); border-radius: 6px;
+      cursor: pointer; transition: background 0.12s;
     }
     .btn-view:hover { background: rgba(59,130,246,0.25); }
-    /* ── Empty state ─────────────────────────────────────────── */
+
+    /* ── Empty state ───────────────────────────────────── */
     .empty {
-      grid-column: 1 / -1;
-      text-align: center;
-      padding: 4rem 2rem;
-      color: var(--muted);
-      font-size: 0.85rem;
+      grid-column: 1 / -1; text-align: center;
+      padding: 4rem 2rem; color: var(--muted); font-size: 0.85rem;
     }
-    /* ── Footer ───────────────────────────────────────────── */
+    /* ── Footer ────────────────────────────────────────── */
     footer {
-      padding: 1.2rem 2rem;
-      border-top: 1px solid var(--border);
-      font-size: 0.72rem;
-      color: #374151;
-      text-align: center;
+      padding: 1rem 2rem; border-top: 1px solid var(--border);
+      font-size: 0.7rem; color: #2a3040; text-align: center;
     }
   </style>
 </head>
@@ -194,7 +183,7 @@
       <span>3D Model Library</span>
     </div>
     <div class="search-wrap">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <svg viewBox="0 0 24 24" stroke-width="2">
         <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
       </svg>
       <input type="text" id="search" placeholder="Search models..." autocomplete="off">
@@ -202,70 +191,87 @@
   </header>
 
   <nav class="filters" id="filters">
-    <button class="filter-btn active" data-cat="all">All</button>
-    <button class="filter-btn" data-cat="site">Site Models</button>
-    <button class="filter-btn" data-cat="building">Buildings</button>
-    <button class="filter-btn" data-cat="infra">Infrastructure</button>
-    <button class="filter-btn" data-cat="equip">Equipment</button>
-    <button class="filter-btn" data-cat="other">Other</button>
+    <button class="filter-btn active" data-cat="all">All <span class="tab-count" id="count-all">0</span></button>
+    <button class="filter-btn" data-cat="site">Site Models <span class="tab-count" id="count-site">0</span></button>
+    <button class="filter-btn" data-cat="building">Buildings <span class="tab-count" id="count-building">0</span></button>
+    <button class="filter-btn" data-cat="infra">Infrastructure <span class="tab-count" id="count-infra">0</span></button>
+    <button class="filter-btn" data-cat="equip">Equipment <span class="tab-count" id="count-equip">0</span></button>
+    <button class="filter-btn" data-cat="other">Other <span class="tab-count" id="count-other">0</span></button>
   </nav>
 
   <main>
-    <div class="grid-label" id="grid-label">1 model</div>
+    <div class="grid-header">
+      <div class="grid-label" id="grid-label"></div>
+    </div>
     <div class="grid" id="grid"></div>
   </main>
 
   <footer>ArchVista &mdash; Archivo-1</footer>
 
   <script>
-    // ================================================================
+    // ============================================================
     // MODEL LIBRARY
     // To add a model, add an entry to this array.
+    //
     // Fields:
-    //   file:     filename inside /models/ (required)
-    //   title:    display name
-    //   desc:     short description
-    //   cat:      'site' | 'building' | 'infra' | 'equip' | 'other'
-    //   size:     approximate file size string
-    //   thumb:    optional path to a thumbnail image
-    // ================================================================
+    //   file  : filename inside /models/          (required)
+    //   title : display name
+    //   desc  : short description
+    //   cat   : 'site' | 'building' | 'infra' | 'equip' | 'other'
+    //   size  : approximate file size string
+    //   thumb : path to thumbnail image, or null for auto-placeholder
+    //           e.g. 'thumbnails/torpederas.jpg'
+    // ============================================================
     const MODELS = [
       {
         file:  'torpederas-valparaisoCLS.3dm',
         title: 'Torpederas de Valpara\u00edso',
-        desc:  'Site model of the historic Torpederas naval complex in Valpara\u00edso, Chile. Includes terrain, buildings, and waterfront infrastructure.',
+        desc:  'Modelo de sitio del complejo naval hist\u00f3rico de las Torpederas en Valpara\u00edso, Chile. Incluye terreno, edificios e infraestructura del borde costero.',
         cat:   'site',
         size:  '~16 MB',
         thumb: null
       }
-      // Add more models here, e.g.:
-      // { file: 'building-a.3dm', title: 'Building A', desc: '...', cat: 'building', size: '~4 MB', thumb: null },
+      // ── A\u00f1adir modelos aqu\u00ed, por ejemplo:
+      // { file: 'edificio-a.3dm', title: 'Edificio A', desc: '...', cat: 'building', size: '~4 MB', thumb: 'thumbnails/edificio-a.jpg' },
     ];
 
-    // ================================================================
-    // RENDERING
-    // ================================================================
-    const BADGE_CLASSES = {
-      site:     'badge-site',
-      building: 'badge-building',
-      infra:    'badge-infra',
-      equip:    'badge-equip',
-      other:    'badge-other'
+    // ============================================================
+    // CONSTANTS
+    // ============================================================
+    const CATS = ['all', 'site', 'building', 'infra', 'equip', 'other'];
+    const BADGE_CLASS = {
+      site: 'badge-site', building: 'badge-building',
+      infra: 'badge-infra', equip: 'badge-equip', other: 'badge-other'
     };
-    const BADGE_LABELS = {
-      site:     'Site Model',
-      building: 'Building',
-      infra:    'Infrastructure',
-      equip:    'Equipment',
-      other:    'Other'
+    const BADGE_LABEL = {
+      site: 'Site Model', building: 'Building',
+      infra: 'Infrastructure', equip: 'Equipment', other: 'Other'
     };
-    const THUMB_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
+    const THUMB_SVG = `<svg viewBox="0 0 24 24" stroke-width="1" stroke="currentColor" fill="none">
       <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>
-      <polyline points="9 22 9 12 15 12 15 22"/>
-    </svg>`;
+      <polyline points="9 22 9 12 15 12 15 22"/></svg>`;
 
     let activeFilter = 'all';
     let searchQuery  = '';
+
+    // ============================================================
+    // COUNT BADGES: update all tab counters
+    // ============================================================
+    function updateCounts() {
+      const q = searchQuery.toLowerCase();
+      CATS.forEach(function(cat) {
+        const n = MODELS.filter(function(m) {
+          const catOk = cat === 'all' || m.cat === cat;
+          if (!catOk) return false;
+          if (!q) return true;
+          return (m.title || '').toLowerCase().includes(q) ||
+                 (m.desc  || '').toLowerCase().includes(q) ||
+                 (m.file  || '').toLowerCase().includes(q);
+        }).length;
+        const el = document.getElementById('count-' + cat);
+        if (el) el.textContent = n;
+      });
+    }
 
     function matchesFilter(m) {
       const catOk = activeFilter === 'all' || m.cat === activeFilter;
@@ -281,12 +287,16 @@
       window.location.href = 'viewer.html?model=' + encodeURIComponent(file);
     }
 
+    // ============================================================
+    // RENDER GRID
+    // ============================================================
     function renderGrid() {
-      const grid  = document.getElementById('grid');
-      const label = document.getElementById('grid-label');
+      const grid    = document.getElementById('grid');
+      const label   = document.getElementById('grid-label');
       const visible = MODELS.filter(matchesFilter);
       label.textContent = visible.length + ' model' + (visible.length !== 1 ? 's' : '');
       grid.innerHTML = '';
+
       if (visible.length === 0) {
         const empty = document.createElement('div');
         empty.className = 'empty';
@@ -294,62 +304,86 @@
         grid.appendChild(empty);
         return;
       }
+
       visible.forEach(function(m) {
         const card = document.createElement('div');
         card.className = 'card';
         card.addEventListener('click', function() { openModel(m.file); });
-        // Thumbnail
-        const thumb = document.createElement('div');
-        thumb.className = 'card-thumb';
+
+        // ─ Thumbnail ─────────────────────────────────
+        const thumbWrap = document.createElement('div');
+        thumbWrap.className = 'card-thumb';
         if (m.thumb) {
           const img = document.createElement('img');
           img.src = m.thumb;
-          img.alt = m.title;
-          thumb.appendChild(img);
+          img.alt = m.title || m.file;
+          // If image fails to load, fall back to placeholder
+          img.onerror = function() {
+            thumbWrap.innerHTML = '';
+            const ph = document.createElement('div');
+            ph.className = 'thumb-placeholder';
+            ph.innerHTML = THUMB_SVG + '<span>3DM</span>';
+            thumbWrap.appendChild(ph);
+          };
+          thumbWrap.appendChild(img);
         } else {
-          const placeholder = document.createElement('div');
-          placeholder.className = 'no-thumb';
-          placeholder.innerHTML = THUMB_SVG + '<span>3DM</span>';
-          thumb.appendChild(placeholder);
+          const ph = document.createElement('div');
+          ph.className = 'thumb-placeholder';
+          ph.innerHTML = THUMB_SVG + '<span>3DM</span>';
+          thumbWrap.appendChild(ph);
         }
-        // Body
-        const body = document.createElement('div');
+
+        // ─ Body ─────────────────────────────────────
+        const body  = document.createElement('div');
         body.className = 'card-body';
-        const top = document.createElement('div');
+
+        const top   = document.createElement('div');
         top.className = 'card-top';
+
         const title = document.createElement('div');
         title.className = 'card-title';
         title.textContent = m.title || m.file;
+
         const badge = document.createElement('span');
-        badge.className = 'badge ' + (BADGE_CLASSES[m.cat] || 'badge-other');
-        badge.textContent = BADGE_LABELS[m.cat] || m.cat;
+        badge.className = 'badge ' + (BADGE_CLASS[m.cat] || 'badge-other');
+        badge.textContent = BADGE_LABEL[m.cat] || m.cat;
+
         top.appendChild(title);
         top.appendChild(badge);
+
         const desc = document.createElement('div');
         desc.className = 'card-desc';
         desc.textContent = m.desc || '';
+
         body.appendChild(top);
         body.appendChild(desc);
-        // Footer
-        const footer = document.createElement('div');
-        footer.className = 'card-footer';
-        const size = document.createElement('span');
-        size.className = 'card-size';
-        size.textContent = m.size || '';
+
+        // ─ Footer ─────────────────────────────────
+        const foot  = document.createElement('div');
+        foot.className = 'card-footer';
+
+        const sz = document.createElement('span');
+        sz.className = 'card-size';
+        sz.textContent = m.size || '';
+
         const btn = document.createElement('button');
         btn.className = 'btn-view';
         btn.textContent = 'View 3D';
         btn.addEventListener('click', function(e) { e.stopPropagation(); openModel(m.file); });
-        footer.appendChild(size);
-        footer.appendChild(btn);
-        card.appendChild(thumb);
+
+        foot.appendChild(sz);
+        foot.appendChild(btn);
+
+        card.appendChild(thumbWrap);
         card.appendChild(body);
-        card.appendChild(footer);
+        card.appendChild(foot);
         grid.appendChild(card);
       });
     }
 
-    // Filter buttons
+    // ============================================================
+    // EVENTS
+    // ============================================================
     document.getElementById('filters').addEventListener('click', function(e) {
       const btn = e.target.closest('.filter-btn');
       if (!btn) return;
@@ -357,15 +391,17 @@
       btn.classList.add('active');
       activeFilter = btn.dataset.cat;
       renderGrid();
+      updateCounts();
     });
 
-    // Search
     document.getElementById('search').addEventListener('input', function(e) {
       searchQuery = e.target.value.trim();
       renderGrid();
+      updateCounts();
     });
 
     // Initial render
+    updateCounts();
     renderGrid();
   </script>
 </body>
