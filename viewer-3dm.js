@@ -31,34 +31,44 @@
         if (el) el.textContent = isFree ? 'Free-Fly' : 'Orbit';
     }
 
-    function isGlass(obj) {
-        let l = '';
-        if (obj.userData && obj.userData.attributes && typeof obj.userData.attributes.layer === 'string')
-            l = obj.userData.attributes.layer.toLowerCase();
-        else if (obj.userData && typeof obj.userData.layer === 'string')
-            l = obj.userData.layer.toLowerCase();
-        const n = (obj.name || '').toLowerCase();
-        return ['glass', 'window', 'vidrio', 'cristal'].some(k => l.includes(k) || n.includes(k));
-    }
-
-    // Use rhino3dm's built-in toThreejsJSON to convert a Mesh object
-    function rhinoMeshToThreejs(rhinoMesh, mat) {
-        const loader = new THREE.BufferGeometryLoader();
-        const json = JSON.parse(rhinoMesh.toThreejsJSON());
-        // toThreejsJSON returns a BufferGeometry JSON
-        const geo = loader.parse(json);
-        return new THREE.Mesh(geo, mat);
-    }
-
-    function makeMat(gl) {
+    function makeMeshMat(gl) {
         return new THREE.MeshStandardMaterial({
-            color: gl ? 0x88b4e8 : 0xeeeeee,
-            roughness: gl ? 0.1 : 0.6,
+            color: gl ? 0x88b4e8 : 0xdddddd,
+            roughness: gl ? 0.1 : 0.65,
             metalness: 0.05,
             transparent: gl,
             opacity: gl ? 0.3 : 1.0,
             side: THREE.DoubleSide
         });
+    }
+
+    function makeLineMat() {
+        return new THREE.LineBasicMaterial({ color: 0x88aaff, linewidth: 2 });
+    }
+
+    // Convert a Rhino mesh to a Three.js Mesh using toThreejsJSON
+    function rhinoMeshToThreeObj(rhinoMesh, mat) {
+        const loader = new THREE.BufferGeometryLoader();
+        const json = JSON.parse(rhinoMesh.toThreejsJSON());
+        const geo = loader.parse(json);
+        return new THREE.Mesh(geo, mat);
+    }
+
+    // Convert a Rhino curve to a Three.js Line
+    function rhinoCurveToLine(rhinoCurve) {
+        // Sample points along the curve
+        const pts = [];
+        const domain = rhinoCurve.domain;
+        const steps = 64;
+        const t0 = domain.min, t1 = domain.max;
+        for (let s = 0; s <= steps; s++) {
+            const t = t0 + (t1 - t0) * (s / steps);
+            const pt = rhinoCurve.pointAt(t);
+            if (pt) pts.push(new THREE.Vector3(pt[0], pt[1], pt[2]));
+        }
+        if (pts.length < 2) return null;
+        const geo = new THREE.BufferGeometry().setFromPoints(pts);
+        return new THREE.Line(geo, makeLineMat());
     }
 
     function loadModel() {
@@ -67,7 +77,6 @@
 
         rhino3dm().then(async function(rhino) {
             try {
-                showLoading('Fetching model...');
                 const res = await fetch('models/' + name);
                 if (!res.ok) throw new Error('HTTP ' + res.status + ': model not found');
                 const buf = await res.arrayBuffer();
@@ -78,23 +87,46 @@
 
                 const group = new THREE.Group();
                 const objs = doc.objects();
+                let isGlassFn = function(obj) {
+                    let l = '';
+                    if (obj.userData && obj.userData.attributes && typeof obj.userData.attributes.layer === 'string')
+                        l = obj.userData.attributes.layer.toLowerCase();
+                    const n = (obj.name || '').toLowerCase();
+                    return ['glass','window','vidrio','cristal'].some(k => l.includes(k) || n.includes(k));
+                };
 
                 for (let i = 0; i < objs.count; i++) {
-                    const obj = objs.get(i);
-                    const geom = obj.geometry();
-                    const gl = isGlass(obj);
-                    const mat = makeMat(gl);
-
                     try {
-                        if (geom.objectType === rhino.ObjectType.Mesh) {
-                            const m = rhinoMeshToThreejs(geom, mat);
-                            group.add(m);
-                        } else if (geom.objectType === rhino.ObjectType.Extrusion ||
-                                   geom.objectType === rhino.ObjectType.Brep) {
+                        const obj = objs.get(i);
+                        const geom = obj.geometry();
+                        const type = geom.objectType;
+                        const gl = isGlassFn(obj);
+
+                        if (type === rhino.ObjectType.Mesh) {
+                            group.add(rhinoMeshToThreeObj(geom, makeMeshMat(gl)));
+                        } else if (type === rhino.ObjectType.Extrusion || type === rhino.ObjectType.Brep) {
                             const rm = geom.getMesh(rhino.MeshType.Any);
                             if (rm) {
-                                group.add(rhinoMeshToThreejs(rm, mat));
+                                group.add(rhinoMeshToThreeObj(rm, makeMeshMat(gl)));
                                 rm.delete();
+                            }
+                        } else if (type === rhino.ObjectType.Curve ||
+                                   type === rhino.ObjectType.ArcCurve ||
+                                   type === rhino.ObjectType.LineCurve ||
+                                   type === rhino.ObjectType.NurbsCurve ||
+                                   type === rhino.ObjectType.PolylineCurve ||
+                                   type === rhino.ObjectType.PolyCurve) {
+                            const line = rhinoCurveToLine(geom);
+                            if (line) group.add(line);
+                        } else {
+                            // Try toThreejsJSON as generic fallback for any other type
+                            if (typeof geom.toThreejsJSON === 'function') {
+                                try {
+                                    const loader2 = new THREE.BufferGeometryLoader();
+                                    const json2 = JSON.parse(geom.toThreejsJSON());
+                                    const geo2 = loader2.parse(json2);
+                                    group.add(new THREE.Mesh(geo2, makeMeshMat(gl)));
+                                } catch(e3) { /* skip */ }
                             }
                         }
                     } catch (e2) {
@@ -102,13 +134,14 @@
                     }
                 }
 
+                doc.delete();
+
                 if (group.children.length === 0) {
-                    throw new Error('No renderable geometry found in model');
+                    throw new Error('No displayable geometry found. The model may contain only unsupported object types.');
                 }
 
                 scene.add(group);
 
-                // Fit camera to model
                 const box = new THREE.Box3().setFromObject(group);
                 const center = new THREE.Vector3();
                 const size = new THREE.Vector3();
@@ -119,9 +152,8 @@
                 orbitCamera.position.set(center.x + d * 2, center.y + d * 1.5, center.z + d * 2);
                 orbitCamera.lookAt(center);
                 orbitCamera.near = d * 0.001;
-                orbitCamera.far = d * 100;
+                orbitCamera.far = d * 200;
                 orbitCamera.updateProjectionMatrix();
-
                 orbitControls.target.copy(center);
                 orbitControls.update();
 
@@ -130,11 +162,10 @@
                 freeCamera.rotation.order = 'YXZ';
                 yaw = freeCamera.rotation.y;
                 pitch = freeCamera.rotation.x;
-                freeCamera.near = d * 0.001;
-                freeCamera.far = d * 100;
+                freeCamera.near = orbitCamera.near;
+                freeCamera.far = orbitCamera.far;
                 freeCamera.updateProjectionMatrix();
 
-                doc.delete();
                 hideLoading();
 
             } catch (e) {
@@ -161,12 +192,12 @@
         orbitControls = new THREE.OrbitControls(orbitCamera, renderer.domElement);
         orbitControls.enableDamping = true;
 
-        scene.add(new THREE.AmbientLight(0xffffff, 0.7));
-        const sun = new THREE.DirectionalLight(0xffffff, 0.8);
+        scene.add(new THREE.AmbientLight(0xffffff, 0.8));
+        const sun = new THREE.DirectionalLight(0xffffff, 0.7);
         sun.position.set(1, 2, 3);
         scene.add(sun);
-        const sun2 = new THREE.DirectionalLight(0xffffff, 0.3);
-        sun2.position.set(-1, -1, -2);
+        const sun2 = new THREE.DirectionalLight(0x8899bb, 0.3);
+        sun2.position.set(-2, -1, -1);
         scene.add(sun2);
 
         window.addEventListener('resize', function() {
