@@ -1,12 +1,21 @@
 (function() {
     'use strict';
 
-    let scene, renderer, orbitCamera, freeCamera, activeCamera, orbitControls;
-    let freeMode = false;
+    let scene, renderer, orbitCamera, walkCamera, flyCamera, orthoCamera, activeCamera, orbitControls;
+let cameraMode = 'orbit'; // 'orbit' | 'walk' | 'fly' | 'ortho'
+    let is2DModel = false;
+    let modelGroup = null;
+    let groundMeshes = [];
+    let modelCenter = new THREE.Vector3();
+    let modelSize = new THREE.Vector3();
+    let modelSpan = 10;
+    const raycaster = new THREE.Raycaster();
+    const downVec = new THREE.Vector3(0, -1, 0);
     const keys = {};
     const velocity = new THREE.Vector3();
-    const damping = 0.9;
+    const damping = 0.85;
     let yaw = 0, pitch = 0;
+    const WALK_HEIGHT = 1.7;
 
     function getModelFromQuery() {
         const p = new URLSearchParams(window.location.search);
@@ -26,9 +35,70 @@
         if (el) el.classList.add('hidden');
     }
 
-    function setModeLabel(isFree) {
+function updateModeUI() {
+        const labels = { orbit: '1 · Orbit', walk: '2 · Walk', fly: '3 · Fly', ortho: '4 · Top View' };
         const el = document.getElementById('mode-label');
-        if (el) el.textContent = isFree ? 'Free-Fly' : 'Orbit';
+        if (el) el.textContent = labels[cameraMode] || cameraMode;
+        document.querySelectorAll('.cam-btn').forEach(function(b) {
+            b.classList.toggle('active', b.dataset.mode === cameraMode);
+        });
+    }
+
+    function setCameraMode(mode) {
+        if (is2DModel && mode !== 'ortho') return; // 2D files locked to ortho
+        const prev = cameraMode;
+        cameraMode = mode;
+        if ((prev === 'walk' || prev === 'fly') && document.pointerLockElement) {
+            document.exitPointerLock();
+        }
+        if (mode === 'orbit') {
+            activeCamera = orbitCamera;
+            orbitControls.enabled = true;
+        } else if (mode === 'walk') {
+            activeCamera = walkCamera;
+            orbitControls.enabled = false;
+            // Place walk camera at ground level above orbit target
+            const target = orbitControls.target.clone();
+            const groundY = getGroundY(target.x, target.z);
+            walkCamera.position.set(target.x, groundY + WALK_HEIGHT, target.z + modelSpan * 0.1);
+            walkCamera.rotation.set(0, 0, 0, 'YXZ');
+            yaw = 0; pitch = 0;
+        } else if (mode === 'fly') {
+            activeCamera = flyCamera;
+            orbitControls.enabled = false;
+            flyCamera.position.copy(orbitCamera.position);
+            flyCamera.lookAt(orbitControls.target);
+            yaw = flyCamera.rotation.y;
+            pitch = flyCamera.rotation.x;
+        } else if (mode === 'ortho') {
+            activeCamera = orthoCamera;
+            orbitControls.enabled = false;
+            syncOrthoCamera();
+        }
+        velocity.set(0, 0, 0);
+        updateModeUI();
+    }
+
+    function syncOrthoCamera() {
+        if (!orthoCamera) return;
+        const aspect = window.innerWidth / window.innerHeight;
+        const halfH = modelSpan * 0.7;
+        const halfW = halfH * aspect;
+        orthoCamera.left = -halfW; orthoCamera.right = halfW;
+        orthoCamera.top = halfH; orthoCamera.bottom = -halfH;
+        orthoCamera.position.set(modelCenter.x, modelCenter.y + modelSpan * 5, modelCenter.z);
+        orthoCamera.lookAt(modelCenter);
+        orthoCamera.updateProjectionMatrix();
+    }
+
+    function getGroundY(x, z) {
+        // Cast a ray downward to find ground surface
+        if (groundMeshes.length === 0) return modelCenter.y;
+        const origin = new THREE.Vector3(x, modelCenter.y + modelSpan * 2, z);
+        raycaster.set(origin, downVec);
+        const hits = raycaster.intersectObjects(groundMeshes, false);
+        if (hits.length > 0) return hits[0].point.y;
+        return modelCenter.y;
     }
 
     function makeMeshMat() {
@@ -178,31 +248,59 @@
                     throw new Error('No renderable geometry found in model (' + total + ' objects parsed)');
                 }
 
+// Detect 2D model: only has Line/Points children, no Mesh
+                let hasMesh = false, hasLineOnly = true;
+                group.children.forEach(function(c) {
+                    if (c.isMesh) { hasMesh = true; hasLineOnly = false; }
+                });
+                is2DModel = !hasMesh;
+
+                // Collect ground meshes for collision (all meshes)
+                groundMeshes = [];
+                group.traverse(function(c) { if (c.isMesh) groundMeshes.push(c); });
+
                 scene.add(group);
+                modelGroup = group;
 
+                // Compute bounding box
                 const box = new THREE.Box3().setFromObject(group);
-                const center = new THREE.Vector3();
-                const size = new THREE.Vector3();
-                box.getCenter(center);
-                box.getSize(size);
-                const d = Math.max(size.x, size.y, size.z) || 10;
+                box.getCenter(modelCenter);
+                box.getSize(modelSize);
+                modelSpan = Math.max(modelSize.x, modelSize.y, modelSize.z) || 10;
 
-                orbitCamera.position.set(center.x + d * 2, center.y + d * 1.5, center.z + d * 2);
-                orbitCamera.lookAt(center);
+                // --- Set up Orbit camera ---
+                const d = modelSpan;
+                orbitCamera.position.set(modelCenter.x + d * 1.4, modelCenter.y + d * 1.2, modelCenter.z + d * 1.4);
+                orbitCamera.lookAt(modelCenter);
                 orbitCamera.near = d * 0.001;
-                orbitCamera.far = d * 200;
+                orbitCamera.far = d * 300;
                 orbitCamera.updateProjectionMatrix();
-                orbitControls.target.copy(center);
+                orbitControls.target.copy(modelCenter);
                 orbitControls.update();
 
-                freeCamera.position.copy(orbitCamera.position);
-                freeCamera.lookAt(center);
-                freeCamera.rotation.order = 'YXZ';
-                yaw = freeCamera.rotation.y;
-                pitch = freeCamera.rotation.x;
-                freeCamera.near = orbitCamera.near;
-                freeCamera.far = orbitCamera.far;
-                freeCamera.updateProjectionMatrix();
+                // --- Set up Walk camera ---
+                walkCamera.near = orbitCamera.near;
+                walkCamera.far = orbitCamera.far;
+                walkCamera.updateProjectionMatrix();
+
+                // --- Set up Fly camera ---
+                flyCamera.position.copy(orbitCamera.position);
+                flyCamera.lookAt(modelCenter);
+                flyCamera.near = orbitCamera.near;
+                flyCamera.far = orbitCamera.far;
+                flyCamera.updateProjectionMatrix();
+                yaw = flyCamera.rotation.y;
+                pitch = flyCamera.rotation.x;
+
+                // --- Set up Ortho camera ---
+                syncOrthoCamera();
+
+                // Auto-select mode
+                if (is2DModel) {
+                    setCameraMode('ortho');
+                } else {
+                    setCameraMode('orbit');
+                }
 
                 hideLoading();
             } catch (e) {
@@ -215,88 +313,161 @@
     function init() {
         scene = new THREE.Scene();
         scene.background = new THREE.Color(0x050608);
-
         renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setPixelRatio(window.devicePixelRatio);
         renderer.setSize(window.innerWidth, window.innerHeight);
         document.body.appendChild(renderer.domElement);
 
-        orbitCamera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000000);
-        freeCamera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000000);
-        freeCamera.rotation.order = 'YXZ';
-        activeCamera = orbitCamera;
+        const aspect = window.innerWidth / window.innerHeight;
 
+        // Orbit camera (perspective)
+        orbitCamera = new THREE.PerspectiveCamera(50, aspect, 0.1, 1000000);
         orbitControls = new THREE.OrbitControls(orbitCamera, renderer.domElement);
         orbitControls.enableDamping = true;
+        orbitControls.dampingFactor = 0.08;
+        orbitControls.maxPolarAngle = Math.PI * 0.88; // Prevent going underground
+        orbitControls.minDistance = 0.5;
 
-        scene.add(new THREE.AmbientLight(0xffffff, 0.8));
-        const sun = new THREE.DirectionalLight(0xffffff, 0.8);
-        sun.position.set(1, 2, 3);
+        // Walk camera (1st person)
+        walkCamera = new THREE.PerspectiveCamera(75, aspect, 0.1, 1000000);
+        walkCamera.rotation.order = 'YXZ';
+
+        // Fly camera (free)
+        flyCamera = new THREE.PerspectiveCamera(75, aspect, 0.1, 1000000);
+        flyCamera.rotation.order = 'YXZ';
+
+        // Ortho camera (top-down)
+        orthoCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 1000000);
+
+        activeCamera = orbitCamera;
+
+        // Lighting
+        scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+        const sun = new THREE.DirectionalLight(0xffffff, 0.9);
+        sun.position.set(1, 2, 1.5);
         scene.add(sun);
-        const sun2 = new THREE.DirectionalLight(0x8899bb, 0.3);
-        sun2.position.set(-2, -1, -1);
-        scene.add(sun2);
+        const fill = new THREE.DirectionalLight(0x8899cc, 0.3);
+        fill.position.set(-2, -0.5, -1);
+        scene.add(fill);
 
+        // Resize handler
         window.addEventListener('resize', function() {
             const w = window.innerWidth, h = window.innerHeight;
             renderer.setSize(w, h);
-            orbitCamera.aspect = freeCamera.aspect = w / h;
+            const a = w / h;
+            orbitCamera.aspect = walkCamera.aspect = flyCamera.aspect = a;
             orbitCamera.updateProjectionMatrix();
-            freeCamera.updateProjectionMatrix();
+            walkCamera.updateProjectionMatrix();
+            flyCamera.updateProjectionMatrix();
+            syncOrthoCamera();
         });
 
+        // Keyboard input
         window.addEventListener('keydown', function(e) {
             keys[e.code] = true;
-            if (e.code === 'KeyF') {
-                freeMode = !freeMode;
-                activeCamera = freeMode ? freeCamera : orbitCamera;
-                setModeLabel(freeMode);
-                if (!freeMode && document.pointerLockElement === renderer.domElement)
-                    document.exitPointerLock();
-                orbitControls.enabled = !freeMode;
-            }
-            if (e.code === 'Space') e.preventDefault();
+            if (e.code === 'Digit1') setCameraMode('orbit');
+            if (e.code === 'Digit2') setCameraMode('walk');
+            if (e.code === 'Digit3') setCameraMode('fly');
+            if (e.code === 'Digit4') setCameraMode('ortho');
+            if (e.code === 'KeyR') resetCamera();
+            if (e.code === 'Space' && (cameraMode === 'walk' || cameraMode === 'fly')) e.preventDefault();
         });
+        window.addEventListener('keyup', function(e) { keys[e.code] = false; });
 
-        window.addEventListener('keyup', function(e) {
-            keys[e.code] = false;
-        });
-
+        // Mouse-look (pointer lock)
         window.addEventListener('mousemove', function(e) {
-            if (!freeMode || document.pointerLockElement !== renderer.domElement) return;
+            if (cameraMode !== 'walk' && cameraMode !== 'fly') return;
+            if (document.pointerLockElement !== renderer.domElement) return;
             yaw -= e.movementX * 0.002;
             pitch -= e.movementY * 0.002;
             pitch = Math.max(-Math.PI / 2 + 0.01, Math.min(Math.PI / 2 - 0.01, pitch));
-            freeCamera.rotation.set(pitch, yaw, 0, 'YXZ');
+            if (cameraMode === 'walk') { walkCamera.rotation.set(pitch, yaw, 0, 'YXZ'); }
+            else { flyCamera.rotation.set(pitch, yaw, 0, 'YXZ'); }
         });
 
         renderer.domElement.addEventListener('click', function() {
-            if (freeMode) renderer.domElement.requestPointerLock();
+            if (cameraMode === 'walk' || cameraMode === 'fly') renderer.domElement.requestPointerLock();
+        });
+
+        // Ortho panning with mouse drag
+        let orthoDrag = false, orthoLast = { x: 0, y: 0 };
+        renderer.domElement.addEventListener('mousedown', function(e) {
+            if (cameraMode === 'ortho') { orthoDrag = true; orthoLast = { x: e.clientX, y: e.clientY }; }
+        });
+        window.addEventListener('mouseup', function() { orthoDrag = false; });
+        window.addEventListener('mousemove', function(e) {
+            if (!orthoDrag || cameraMode !== 'ortho') return;
+            const dx = (e.clientX - orthoLast.x) / window.innerWidth * (orthoCamera.right - orthoCamera.left);
+            const dz = (e.clientY - orthoLast.y) / window.innerHeight * (orthoCamera.top - orthoCamera.bottom);
+            orthoCamera.position.x -= dx;
+            orthoCamera.position.z += dz;
+            orthoLast = { x: e.clientX, y: e.clientY };
+        });
+        renderer.domElement.addEventListener('wheel', function(e) {
+            if (cameraMode !== 'ortho') return;
+            const factor = e.deltaY > 0 ? 1.1 : 0.9;
+            orthoCamera.left *= factor; orthoCamera.right *= factor;
+            orthoCamera.top *= factor; orthoCamera.bottom *= factor;
+            orthoCamera.updateProjectionMatrix();
+        }, { passive: true });
+
+        // Camera buttons
+        document.querySelectorAll('.cam-btn').forEach(function(btn) {
+            btn.addEventListener('click', function() { setCameraMode(btn.dataset.mode); });
         });
 
         loadModel();
 
+        // Animation loop
         (function anim() {
             requestAnimationFrame(anim);
-            if (freeMode) {
+            const spd = modelSpan * 0.003;
+
+            if (cameraMode === 'walk') {
+                // Horizontal movement only
+                const forward = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
+                const right = new THREE.Vector3(Math.cos(yaw), 0, -Math.sin(yaw));
+                if (keys['KeyW']) velocity.addScaledVector(forward, spd);
+                if (keys['KeyS']) velocity.addScaledVector(forward, -spd);
+                if (keys['KeyA']) velocity.addScaledVector(right, -spd);
+                if (keys['KeyD']) velocity.addScaledVector(right, spd);
+                velocity.multiplyScalar(damping);
+                walkCamera.position.add(velocity);
+                // Ground collision: snap to terrain + WALK_HEIGHT
+                const gY = getGroundY(walkCamera.position.x, walkCamera.position.z);
+                walkCamera.position.y = gY + WALK_HEIGHT;
+
+            } else if (cameraMode === 'fly') {
                 const f = new THREE.Vector3(), r = new THREE.Vector3();
-                freeCamera.getWorldDirection(f);
-                f.y = 0; f.normalize();
-                r.crossVectors(new THREE.Vector3(0, 1, 0), f).normalize();
-                const spd = 0.5;
+                flyCamera.getWorldDirection(f);
+                r.crossVectors(f, flyCamera.up).normalize();
                 if (keys['KeyW']) velocity.addScaledVector(f, spd);
                 if (keys['KeyS']) velocity.addScaledVector(f, -spd);
-                if (keys['KeyA']) velocity.addScaledVector(r, spd);
-                if (keys['KeyD']) velocity.addScaledVector(r, -spd);
+                if (keys['KeyA']) velocity.addScaledVector(r, -spd);
+                if (keys['KeyD']) velocity.addScaledVector(r, spd);
                 if (keys['Space']) velocity.y += spd;
                 if (keys['ShiftLeft'] || keys['ShiftRight']) velocity.y -= spd;
                 velocity.multiplyScalar(damping);
-                freeCamera.position.add(velocity);
-            } else {
+                flyCamera.position.add(velocity);
+
+            } else if (cameraMode === 'orbit') {
                 orbitControls.update();
             }
+
             renderer.render(scene, activeCamera);
         })();
+    }
+
+    function resetCamera() {
+        if (!modelGroup) return;
+        if (cameraMode === 'orbit') {
+            const d = modelSpan;
+            orbitCamera.position.set(modelCenter.x + d * 1.4, modelCenter.y + d * 1.2, modelCenter.z + d * 1.4);
+            orbitControls.target.copy(modelCenter);
+            orbitControls.update();
+        } else if (cameraMode === 'ortho') {
+            syncOrthoCamera();
+        }
     }
 
     init();
