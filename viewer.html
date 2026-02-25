@@ -52,6 +52,16 @@
       display: block;
     }
   </style>
+
+  <!-- Import map: tells the browser what "three" means when CDN files reference it -->
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.161.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.161.0/examples/jsm/"
+      }
+    }
+  </script>
 </head>
 <body>
   <div id="overlay">
@@ -65,8 +75,6 @@
   </div>
   <button id="back-btn" onclick="window.location.href='index.html'">&larr; Back to Library</button>
 
-  <!-- Only this script -->
   <script type="module" src="viewer-3dm.js"></script>
 </body>
 </html>
-
