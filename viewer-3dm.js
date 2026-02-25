@@ -8,13 +8,13 @@
   let modelGroup = null;
   let groundMeshes = [];
   let modelCenter = new THREE.Vector3();
-  let modelSize   = new THREE.Vector3();
-  let modelSpan   = 10;
+  let modelSize = new THREE.Vector3();
+  let modelSpan = 10;
   const raycaster = new THREE.Raycaster();
-  const downVec   = new THREE.Vector3(0, -1, 0);
-  const keys      = {};
-  const velocity  = new THREE.Vector3();
-  const damping   = 0.85;
+  const downVec = new THREE.Vector3(0, -1, 0);
+  const keys = {};
+  const velocity = new THREE.Vector3();
+  const damping = 0.85;
   let yaw = 0, pitch = 0;
   const WALK_HEIGHT = 1.7;
 
@@ -24,22 +24,43 @@
 
   // Special layer-name keywords -> material overrides
   const LAYER_OVERRIDES = {
-    glass:   { color: 0xadd8f7, roughness: 0.05, metalness: 0.1,  transparent: true, opacity: 0.35 },
-    window:  { color: 0xadd8f7, roughness: 0.05, metalness: 0.1,  transparent: true, opacity: 0.35 },
-    water:   { color: 0x1a6fa8, roughness: 0.1,  metalness: 0.3,  transparent: true, opacity: 0.75 },
-    ocean:   { color: 0x1a6fa8, roughness: 0.1,  metalness: 0.3,  transparent: true, opacity: 0.75 },
-    terrain: { color: 0x8a7560, roughness: 0.9,  metalness: 0.0 },
-    ground:  { color: 0x8a7560, roughness: 0.9,  metalness: 0.0 },
-    metal:   { color: 0x888888, roughness: 0.3,  metalness: 0.85 },
-    steel:   { color: 0x888888, roughness: 0.3,  metalness: 0.85 },
-    concrete:{ color: 0xb0a898, roughness: 0.85, metalness: 0.0  }
+    glass:     { color: 0xadd8f7, roughness: 0.05, metalness: 0.1,  transparent: true, opacity: 0.35 },
+    window:    { color: 0xadd8f7, roughness: 0.05, metalness: 0.1,  transparent: true, opacity: 0.35 },
+    water:     { color: 0x1a6fa8, roughness: 0.1,  metalness: 0.3,  transparent: true, opacity: 0.75 },
+    ocean:     { color: 0x1a6fa8, roughness: 0.1,  metalness: 0.3,  transparent: true, opacity: 0.75 },
+    terrain:   { color: 0x8a7560, roughness: 0.9,  metalness: 0.0 },
+    ground:    { color: 0x8a7560, roughness: 0.9,  metalness: 0.0 },
+    metal:     { color: 0x888888, roughness: 0.3,  metalness: 0.85 },
+    steel:     { color: 0x888888, roughness: 0.3,  metalness: 0.85 },
+    concrete:  { color: 0xb0a898, roughness: 0.85, metalness: 0.0 }
   };
+
+  // ── Sun System ──────────────────────────────────────────────────────────
+  let sunLight, sunPos = { azimuth: 45, altitude: 45 }, sunIntensity = 1.1;
+
+  function updateSun() {
+    if (!sunLight) return;
+    const phi = (90 - sunPos.altitude) * (Math.PI / 180);
+    const theta = (sunPos.azimuth) * (Math.PI / 180);
+    const d = modelSpan * 2;
+    sunLight.position.set(
+      d * Math.sin(phi) * Math.cos(theta),
+      d * Math.cos(phi),
+      d * Math.sin(phi) * Math.sin(theta)
+    );
+    sunLight.intensity = sunIntensity;
+  }
+
+  window.setSunAzimuth = function(v) { sunPos.azimuth = parseFloat(v); updateSun(); };
+  window.setSunAltitude = function(v) { sunPos.altitude = parseFloat(v); updateSun(); };
+  window.setSunIntensity = function(v) { sunIntensity = parseFloat(v); updateSun(); };
 
   // ── Helpers ─────────────────────────────────────────────────────────────
   function getModelFromQuery() {
     const p = new URLSearchParams(window.location.search);
     return p.get('model') || 'torpederas-valparaisoCLS.3dm';
   }
+
   function showLoading(msg) {
     const el = document.getElementById('loading');
     if (!el) return;
@@ -47,6 +68,7 @@
     const p = el.querySelector('p');
     if (p && msg) p.textContent = msg;
   }
+
   function hideLoading() {
     const el = document.getElementById('loading');
     if (el) el.classList.add('hidden');
@@ -57,35 +79,47 @@
     const labels = { orbit: 'Orbit', walk: 'Walk', fly: 'Fly', ortho: 'Top View' };
     const el = document.getElementById('mode-label');
     if (el) el.textContent = labels[cameraMode] || cameraMode;
+
     document.querySelectorAll('.cam-btn').forEach(function(b) {
       b.classList.toggle('active', b.dataset.mode === cameraMode);
     });
     document.dispatchEvent(new CustomEvent('modchange', { detail: cameraMode }));
   }
+
   function setCameraMode(mode) {
     if (is2DModel && mode !== 'ortho') return;
     const prev = cameraMode;
     cameraMode = mode;
+
     if ((prev === 'walk' || prev === 'fly') && document.pointerLockElement) document.exitPointerLock();
+
     if (mode === 'orbit') {
-      activeCamera = orbitCamera; orbitControls.enabled = true;
+      activeCamera = orbitCamera;
+      orbitControls.enabled = true;
     } else if (mode === 'walk') {
-      activeCamera = walkCamera; orbitControls.enabled = false;
+      activeCamera = walkCamera;
+      orbitControls.enabled = false;
       const target = orbitControls.target.clone();
       const groundY = getGroundY(target.x, target.z);
       walkCamera.position.set(target.x, groundY + WALK_HEIGHT, target.z + modelSpan * 0.1);
-      walkCamera.rotation.set(0, 0, 0, 'YXZ'); yaw = 0; pitch = 0;
+      walkCamera.rotation.set(0, 0, 0, 'YXZ');
+      yaw = 0; pitch = 0;
     } else if (mode === 'fly') {
-      activeCamera = flyCamera; orbitControls.enabled = false;
+      activeCamera = flyCamera;
+      orbitControls.enabled = false;
       flyCamera.position.copy(orbitCamera.position);
       flyCamera.lookAt(orbitControls.target);
-      yaw = flyCamera.rotation.y; pitch = flyCamera.rotation.x;
+      yaw = flyCamera.rotation.y;
+      pitch = flyCamera.rotation.x;
     } else if (mode === 'ortho') {
-      activeCamera = orthoCamera; orbitControls.enabled = false; syncOrthoCamera();
+      activeCamera = orthoCamera;
+      orbitControls.enabled = false;
+      syncOrthoCamera();
     }
     velocity.set(0, 0, 0);
     updateModeUI();
   }
+
   function syncOrthoCamera() {
     if (!orthoCamera) return;
     const aspect = window.innerWidth / window.innerHeight;
@@ -96,6 +130,7 @@
     orthoCamera.lookAt(modelCenter);
     orthoCamera.updateProjectionMatrix();
   }
+
   function getGroundY(x, z) {
     if (groundMeshes.length === 0) return modelCenter.y;
     const origin = new THREE.Vector3(x, modelCenter.y + modelSpan * 2, z);
@@ -103,6 +138,7 @@
     const hits = raycaster.intersectObjects(groundMeshes, false);
     return hits.length > 0 ? hits[0].point.y : modelCenter.y;
   }
+
   function resetCamera() {
     if (!modelGroup) return;
     if (cameraMode === 'orbit') {
@@ -110,10 +146,45 @@
       orbitCamera.position.set(modelCenter.x + d * 1.4, modelCenter.y + d * 1.2, modelCenter.z + d * 1.4);
       orbitControls.target.copy(modelCenter);
       orbitControls.update();
-    } else if (cameraMode === 'ortho') { syncOrthoCamera(); }
+    } else if (cameraMode === 'ortho') {
+      syncOrthoCamera();
+    }
   }
-  // Expose to window so HTML onclick can call it
   window.resetCamera = resetCamera;
+
+  // ── Layers Panel ────────────────────────────────────────────────────────
+  function buildLayersPanel(doc) {
+    const list = document.getElementById('layer-list');
+    if (!list) return;
+    list.innerHTML = '';
+    
+    const layers = doc.layers();
+    for (let i = 0; i < layers.count; i++) {
+      const L = layers.get(i);
+      const row = document.createElement('div');
+      row.className = 'layer-row';
+      
+      const toggle = document.createElement('div');
+      toggle.className = 'layer-toggle';
+      toggle.onclick = () => {
+        const visible = !toggle.classList.contains('off');
+        toggle.classList.toggle('off');
+        modelGroup.traverse(obj => {
+          if (obj.userData && obj.userData.layerIndex === i) {
+            obj.visible = !visible;
+          }
+        });
+      };
+      
+      const name = document.createElement('div');
+      name.className = 'layer-name';
+      name.textContent = L.name || ('Layer ' + i);
+      
+      row.appendChild(toggle);
+      row.appendChild(name);
+      list.appendChild(row);
+    }
+  }
 
   // ── Material helpers ─────────────────────────────────────────────────────
   function buildMatSet(hexColor, layerName) {
@@ -122,25 +193,20 @@
     Object.keys(LAYER_OVERRIDES).forEach(function(k) {
       if (!ovr && lname.indexOf(k) !== -1) ovr = LAYER_OVERRIDES[k];
     });
-    const rendParams = ovr ? Object.assign({ side: THREE.DoubleSide }, ovr)
-      : { color: hexColor, roughness: 0.72, metalness: 0.05, side: THREE.DoubleSide };
+
+    const rendParams = ovr ? Object.assign({ side: THREE.DoubleSide }, ovr) : { color: hexColor, roughness: 0.72, metalness: 0.05, side: THREE.DoubleSide };
     const rendered = new THREE.MeshStandardMaterial(rendParams);
-    const clay = new THREE.MeshStandardMaterial({
-      color: 0xd4c5b0, roughness: 0.75, metalness: 0.0, side: THREE.DoubleSide
-    });
-    const wireframe = new THREE.MeshStandardMaterial({
-      color: hexColor, wireframe: true, side: THREE.DoubleSide
-    });
-    const xray = new THREE.MeshStandardMaterial({
-      color: hexColor, transparent: true, opacity: 0.18,
-      roughness: 0.3, metalness: 0.0,
-      side: THREE.DoubleSide, depthWrite: false
-    });
+    const clay = new THREE.MeshStandardMaterial({ color: 0xd4c5b0, roughness: 0.75, metalness: 0.0, side: THREE.DoubleSide });
+    const wireframe = new THREE.MeshStandardMaterial({ color: hexColor, wireframe: true, side: THREE.DoubleSide });
+    const xray = new THREE.MeshStandardMaterial({ color: hexColor, transparent: true, opacity: 0.18, roughness: 0.3, metalness: 0.0, side: THREE.DoubleSide, depthWrite: false });
+
     return { rendered, clay, wireframe, xray };
   }
+
   function makeLineMat(hexColor) {
     return new THREE.LineBasicMaterial({ color: hexColor || 0x88aaff });
   }
+
   function applyStyle(style) {
     visualStyle = style;
     document.querySelectorAll('.style-btn').forEach(function(b) {
@@ -165,20 +231,22 @@
     const b = rc.b !== undefined ? rc.b : (rc[2] || 0);
     return (r << 16) | (g << 8) | b;
   }
+
   function getObjAppearance(obj, layerTable) {
     let hexColor = 0xcccccc;
     let layerName = '';
+    let layerIndex = -1;
     try {
       const attrs = obj.attributes();
-      if (!attrs) return { hexColor, layerName };
+      if (!attrs) return { hexColor, layerName, layerIndex };
+      layerIndex = attrs.layerIndex;
       const colorSrc = attrs.colorSource;
       if (colorSrc === 1 || colorSrc === 'object') {
         hexColor = rhinoColorToHex(attrs.objectColor || attrs.drawColor);
       } else {
-        const layerIdx = attrs.layerIndex;
-        if (layerTable && layerIdx !== undefined && layerIdx >= 0) {
+        if (layerTable && layerIndex >= 0) {
           try {
-            const layer = layerTable.get(layerIdx);
+            const layer = layerTable.get(layerIndex);
             if (layer) {
               layerName = layer.name || '';
               hexColor = rhinoColorToHex(layer.color);
@@ -187,7 +255,7 @@
         }
       }
     } catch(e) {}
-    return { hexColor, layerName };
+    return { hexColor, layerName, layerIndex };
   }
 
   // ── Geometry conversion ──────────────────────────────────────────────────
@@ -195,7 +263,11 @@
     const results = [];
     const hex = appearance ? appearance.hexColor : 0xcccccc;
     const lname = appearance ? appearance.layerName : '';
-    // Strategy 1: toThreejsJSON (native mesh)
+    const lidx = appearance ? appearance.layerIndex : -1;
+
+    // Helper to tag objects
+    const tag = (o) => { o.userData = { layerIndex: lidx }; return o; };
+
     if (typeof geom.toThreejsJSON === 'function') {
       try {
         const json = geom.toThreejsJSON();
@@ -204,78 +276,42 @@
           const geo = new THREE.BufferGeometryLoader().parse(parsed);
           if (geo) {
             const matSet = buildMatSet(hex, lname);
-            const mesh = new THREE.Mesh(geo, matSet[visualStyle] || matSet.rendered);
+            const mesh = tag(new THREE.Mesh(geo, matSet[visualStyle] || matSet.rendered));
             meshMatCache[mesh.uuid] = matSet;
-            results.push(mesh);
-            return results;
+            results.push(mesh); return results;
           }
         }
-      } catch(e) { console.warn('toThreejsJSON failed:', e.message); }
+      } catch(e) {}
     }
-    // Strategy 2: getMesh (Brep / Extrusion / Surface)
+
     if (typeof geom.getMesh === 'function') {
-      const meshTypes = [];
-      try { meshTypes.push(rhino.MeshType.Any); } catch(e) {}
-      try { meshTypes.push(rhino.MeshType.Default); } catch(e) {}
-      try { meshTypes.push(rhino.MeshType.Render); } catch(e) {}
-      meshTypes.push(0, 1, 2, 3, 4);
-      for (let mi = 0; mi < meshTypes.length; mi++) {
+      const types = [rhino.MeshType.Any, rhino.MeshType.Default, 0, 1];
+      for (let t of types) {
         try {
-          const rm = geom.getMesh(meshTypes[mi]);
-          if (rm && typeof rm.toThreejsJSON === 'function') {
-            const json = rm.toThreejsJSON();
-            const parsed = (typeof json === 'string') ? JSON.parse(json) : json;
-            if (parsed && parsed.data && parsed.data.attributes) {
-              const geo = new THREE.BufferGeometryLoader().parse(parsed);
-              if (geo) {
-                const matSet = buildMatSet(hex, lname);
-                const mesh = new THREE.Mesh(geo, matSet[visualStyle] || matSet.rendered);
-                meshMatCache[mesh.uuid] = matSet;
-                try { rm.delete(); } catch(e) {}
-                results.push(mesh);
-                return results;
-              }
-            }
-            try { rm.delete(); } catch(e) {}
+          const rm = geom.getMesh(t);
+          if (rm) {
+            const geo = new THREE.BufferGeometryLoader().parse(JSON.parse(rm.toThreejsJSON()));
+            const matSet = buildMatSet(hex, lname);
+            const mesh = tag(new THREE.Mesh(geo, matSet[visualStyle] || matSet.rendered));
+            meshMatCache[mesh.uuid] = matSet;
+            rm.delete(); results.push(mesh); return results;
           }
         } catch(e) {}
       }
     }
-    // Strategy 3: curve sampling
-    if (typeof geom.domain !== 'undefined' && typeof geom.pointAt === 'function') {
+
+    if (typeof geom.pointAt === 'function') {
       try {
-        const domain = geom.domain;
-        const t0 = (domain && domain.min !== undefined) ? domain.min : 0;
-        const t1 = (domain && domain.max !== undefined) ? domain.max : 1;
-        if (t1 > t0) {
-          const pts = [], steps = 80;
-          for (let s = 0; s <= steps; s++) {
-            const t = t0 + (t1 - t0) * (s / steps);
-            try {
-              const pt = geom.pointAt(t);
-              if (pt && pt.length >= 3) pts.push(new THREE.Vector3(pt[0], pt[1], pt[2]));
-            } catch(e) {}
-          }
-          if (pts.length >= 2) {
-            const geo = new THREE.BufferGeometry().setFromPoints(pts);
-            results.push(new THREE.Line(geo, makeLineMat(hex)));
-            return results;
-          }
+        const pts = [], steps = 60, d = geom.domain;
+        for (let s = 0; s <= steps; s++) {
+          const p = geom.pointAt(d.min + (d.max - d.min) * (s / steps));
+          pts.push(new THREE.Vector3(p[0], p[1], p[2]));
         }
-      } catch(e) { console.warn('Curve sampling failed:', e.message); }
-    }
-    // Strategy 4: single point
-    if (typeof geom.location !== 'undefined') {
-      try {
-        const loc = geom.location;
-        if (loc && loc.length >= 3) {
-          const geo = new THREE.BufferGeometry();
-          geo.setAttribute('position', new THREE.Float32BufferAttribute([loc[0], loc[1], loc[2]], 3));
-          results.push(new THREE.Points(geo, new THREE.PointsMaterial({ color: hex, size: 0.5 })));
-          return results;
-        }
+        results.push(tag(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), makeLineMat(hex))));
+        return results;
       } catch(e) {}
     }
+
     return results;
   }
 
@@ -286,67 +322,43 @@
     rhino3dm().then(async function(rhino) {
       try {
         const res = await fetch('models/' + name);
-        if (!res.ok) throw new Error('HTTP ' + res.status + ': model not found');
+        if (!res.ok) throw new Error('HTTP ' + res.status);
         const buf = await res.arrayBuffer();
         showLoading('Parsing geometry...');
         const doc = rhino.File3dm.fromByteArray(new Uint8Array(buf));
-        if (!doc) throw new Error('Could not parse Rhino document');
-        let layerTable = null;
-        try { layerTable = doc.layers(); } catch(e) {}
         const group = new THREE.Group();
-        // Fix orientation: Rhino Z-up -> THREE Y-up
         group.rotation.x = -Math.PI / 2;
+        
+        const layers = doc.layers();
         const objs = doc.objects();
-        const total = objs.count;
-        console.log('Object count:', total);
-        for (let i = 0; i < total; i++) {
+        for (let i = 0; i < objs.count; i++) {
           try {
-            const obj = objs.get(i);
-            if (!obj) continue;
-            const geom = obj.geometry();
-            if (!geom) continue;
-            const appearance = getObjAppearance(obj, layerTable);
-            const threeObjs = rhinoGeomToThreeObjs(geom, rhino, appearance);
-            threeObjs.forEach(function(o) { group.add(o); });
-          } catch(e2) { console.warn('Skipping object ' + i + ':', e2.message); }
+            const o = objs.get(i);
+            const appearance = getObjAppearance(o, layers);
+            rhinoGeomToThreeObjs(o.geometry(), rhino, appearance).forEach(three => group.add(three));
+          } catch(e) {}
         }
+        
+        buildLayersPanel(doc);
         doc.delete();
-        console.log('Group children:', group.children.length, '/', total);
-        if (group.children.length === 0)
-          throw new Error('No renderable geometry found (' + total + ' objects parsed)');
-        let hasMesh = false;
-        group.children.forEach(function(c) { if (c.isMesh) hasMesh = true; });
-        is2DModel = !hasMesh;
+        
+        if (group.children.length === 0) throw new Error('Empty model');
+        
         groundMeshes = [];
-        group.traverse(function(c) { if (c.isMesh) groundMeshes.push(c); });
+        group.traverse(c => { if (c.isMesh) groundMeshes.push(c); });
         scene.add(group);
         modelGroup = group;
+
         const box = new THREE.Box3().setFromObject(group);
         box.getCenter(modelCenter);
         box.getSize(modelSize);
         modelSpan = Math.max(modelSize.x, modelSize.y, modelSize.z) || 10;
-        const d = modelSpan;
-        orbitCamera.position.set(modelCenter.x + d * 1.4, modelCenter.y + d * 1.2, modelCenter.z + d * 1.4);
-        orbitCamera.lookAt(modelCenter);
-        orbitCamera.near = d * 0.001; orbitCamera.far = d * 300;
-        orbitCamera.updateProjectionMatrix();
-        orbitControls.target.copy(modelCenter);
-        orbitControls.update();
-        walkCamera.near = flyCamera.near = orbitCamera.near;
-        walkCamera.far  = flyCamera.far  = orbitCamera.far;
-        walkCamera.updateProjectionMatrix();
-        flyCamera.position.copy(orbitCamera.position);
-        flyCamera.lookAt(modelCenter);
-        flyCamera.updateProjectionMatrix();
-        yaw = flyCamera.rotation.y; pitch = flyCamera.rotation.x;
-        syncOrthoCamera();
-        setCameraMode(is2DModel ? 'ortho' : 'orbit');
-        applyStyle(visualStyle);
+        
+        resetCamera();
+        updateSun();
+        setCameraMode(groundMeshes.length === 0 ? 'ortho' : 'orbit');
         hideLoading();
-      } catch(e) {
-        console.error(e);
-        showLoading('Error: ' + e.message);
-      }
+      } catch(e) { showLoading('Error: ' + e.message); }
     });
   }
 
@@ -357,126 +369,75 @@
     renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setPixelRatio(window.devicePixelRatio);
     renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.shadowMap.enabled = false;
-    // Filmic tone mapping for more natural, less blown-out colors
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 0.9;
     document.body.appendChild(renderer.domElement);
+
     const aspect = window.innerWidth / window.innerHeight;
     orbitCamera = new THREE.PerspectiveCamera(50, aspect, 0.1, 1000000);
     orbitControls = new THREE.OrbitControls(orbitCamera, renderer.domElement);
     orbitControls.enableDamping = true;
-    orbitControls.dampingFactor = 0.08;
-    orbitControls.maxPolarAngle = Math.PI * 0.88;
-    orbitControls.minDistance = 0.5;
+    
     walkCamera = new THREE.PerspectiveCamera(75, aspect, 0.1, 1000000);
     walkCamera.rotation.order = 'YXZ';
-    flyCamera  = new THREE.PerspectiveCamera(75, aspect, 0.1, 1000000);
+    flyCamera = new THREE.PerspectiveCamera(75, aspect, 0.1, 1000000);
     flyCamera.rotation.order = 'YXZ';
     orthoCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 1000000);
     activeCamera = orbitCamera;
-    // Lighting: hemisphere (sky/ground) + key sun + soft fill
-    const hemi = new THREE.HemisphereLight(0xd6e4f0, 0x3a3020, 0.6);
-    scene.add(hemi);
-    const sun = new THREE.DirectionalLight(0xfff5e0, 1.1);
-    sun.position.set(2, 4, 2);
-    scene.add(sun);
-    const fill = new THREE.DirectionalLight(0x8899cc, 0.35);
-    fill.position.set(-3, -1, -2);
-    scene.add(fill);
-    // Resize
-    window.addEventListener('resize', function() {
+
+    scene.add(new THREE.HemisphereLight(0xd6e4f0, 0x3a3020, 0.6));
+    sunLight = new THREE.DirectionalLight(0xfff5e0, 1.1);
+    scene.add(sunLight);
+    scene.add(new THREE.DirectionalLight(0x8899cc, 0.35));
+
+    window.addEventListener('resize', () => {
       const w = window.innerWidth, h = window.innerHeight;
       renderer.setSize(w, h);
-      const a = w / h;
-      orbitCamera.aspect = walkCamera.aspect = flyCamera.aspect = a;
-      orbitCamera.updateProjectionMatrix();
-      walkCamera.updateProjectionMatrix();
-      flyCamera.updateProjectionMatrix();
+      orbitCamera.aspect = walkCamera.aspect = flyCamera.aspect = w / h;
+      [orbitCamera, walkCamera, flyCamera].forEach(c => c.updateProjectionMatrix());
       syncOrthoCamera();
     });
-    // Keyboard
-    window.addEventListener('keydown', function(e) {
+
+    window.addEventListener('keydown', e => {
       keys[e.code] = true;
       if (e.code === 'Digit1') setCameraMode('orbit');
       if (e.code === 'Digit2') setCameraMode('walk');
       if (e.code === 'Digit3') setCameraMode('fly');
       if (e.code === 'Digit4') setCameraMode('ortho');
       if (e.code === 'KeyR') resetCamera();
-      if (e.code === 'Space' && (cameraMode === 'walk' || cameraMode === 'fly')) e.preventDefault();
     });
-    window.addEventListener('keyup', function(e) { keys[e.code] = false; });
-    // Mouse-look
-    window.addEventListener('mousemove', function(e) {
-      if (cameraMode !== 'walk' && cameraMode !== 'fly') return;
-      if (document.pointerLockElement !== renderer.domElement) return;
-      yaw   -= e.movementX * 0.002;
-      pitch -= e.movementY * 0.002;
-      pitch = Math.max(-Math.PI / 2 + 0.01, Math.min(Math.PI / 2 - 0.01, pitch));
-      if (cameraMode === 'walk') walkCamera.rotation.set(pitch, yaw, 0, 'YXZ');
-      else flyCamera.rotation.set(pitch, yaw, 0, 'YXZ');
+    window.addEventListener('keyup', e => { keys[e.code] = false; });
+
+    window.addEventListener('mousemove', e => {
+      if ((cameraMode !== 'walk' && cameraMode !== 'fly') || document.pointerLockElement !== renderer.domElement) return;
+      yaw -= e.movementX * 0.002; pitch -= e.movementY * 0.002;
+      pitch = Math.max(-1.56, Math.min(1.56, pitch));
+      (cameraMode === 'walk' ? walkCamera : flyCamera).rotation.set(pitch, yaw, 0, 'YXZ');
     });
-    renderer.domElement.addEventListener('click', function() {
-      if (cameraMode === 'walk' || cameraMode === 'fly') renderer.domElement.requestPointerLock();
-    });
-    // Ortho pan + zoom
-    let orthoDrag = false, orthoLast = { x: 0, y: 0 };
-    renderer.domElement.addEventListener('mousedown', function(e) {
-      if (cameraMode === 'ortho') { orthoDrag = true; orthoLast = { x: e.clientX, y: e.clientY }; }
-    });
-    window.addEventListener('mouseup', function() { orthoDrag = false; });
-    window.addEventListener('mousemove', function(e) {
-      if (!orthoDrag || cameraMode !== 'ortho') return;
-      const dx = (e.clientX - orthoLast.x) / window.innerWidth  * (orthoCamera.right - orthoCamera.left);
-      const dz = (e.clientY - orthoLast.y) / window.innerHeight * (orthoCamera.top - orthoCamera.bottom);
-      orthoCamera.position.x -= dx;
-      orthoCamera.position.z += dz;
-      orthoLast = { x: e.clientX, y: e.clientY };
-    });
-    renderer.domElement.addEventListener('wheel', function(e) {
-      if (cameraMode !== 'ortho') return;
-      const f = e.deltaY > 0 ? 1.1 : 0.9;
-      orthoCamera.left *= f; orthoCamera.right *= f;
-      orthoCamera.top  *= f; orthoCamera.bottom *= f;
-      orthoCamera.updateProjectionMatrix();
-    }, { passive: true });
-    // Camera + style buttons
-    document.querySelectorAll('.cam-btn').forEach(function(btn) {
-      btn.addEventListener('click', function() { setCameraMode(btn.dataset.mode); });
-    });
-    document.querySelectorAll('.style-btn').forEach(function(btn) {
-      btn.addEventListener('click', function() { applyStyle(btn.dataset.style); });
-    });
+
+    renderer.domElement.onclick = () => { if (cameraMode === 'walk' || cameraMode === 'fly') renderer.domElement.requestPointerLock(); };
+
     loadModel();
-    // Animation loop
+
     (function anim() {
       requestAnimationFrame(anim);
       const spd = modelSpan * 0.003;
-      if (cameraMode === 'walk') {
-        const forward = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
-        const right   = new THREE.Vector3( Math.cos(yaw), 0, -Math.sin(yaw));
-        if (keys['KeyW']) velocity.addScaledVector(forward,  spd);
-        if (keys['KeyS']) velocity.addScaledVector(forward, -spd);
-        if (keys['KeyA']) velocity.addScaledVector(right,   -spd);
-        if (keys['KeyD']) velocity.addScaledVector(right,    spd);
-        velocity.multiplyScalar(damping);
-        walkCamera.position.add(velocity);
-        walkCamera.position.y = getGroundY(walkCamera.position.x, walkCamera.position.z) + WALK_HEIGHT;
-      } else if (cameraMode === 'fly') {
+      if (cameraMode === 'walk' || cameraMode === 'fly') {
+        const cam = cameraMode === 'walk' ? walkCamera : flyCamera;
         const f = new THREE.Vector3(), r = new THREE.Vector3();
-        flyCamera.getWorldDirection(f);
-        r.crossVectors(f, flyCamera.up).normalize();
-        if (keys['KeyW']) velocity.addScaledVector(f,  spd);
+        cam.getWorldDirection(f); if (cameraMode === 'walk') f.y = 0; f.normalize();
+        r.crossVectors(f, cam.up).normalize();
+        if (keys['KeyW']) velocity.addScaledVector(f, spd);
         if (keys['KeyS']) velocity.addScaledVector(f, -spd);
         if (keys['KeyA']) velocity.addScaledVector(r, -spd);
-        if (keys['KeyD']) velocity.addScaledVector(r,  spd);
-        if (keys['Space'])                            velocity.y += spd;
-        if (keys['ShiftLeft'] || keys['ShiftRight'])  velocity.y -= spd;
+        if (keys['KeyD']) velocity.addScaledVector(r, spd);
+        if (cameraMode === 'fly') {
+          if (keys['Space']) velocity.y += spd;
+          if (keys['ShiftLeft']) velocity.y -= spd;
+        }
         velocity.multiplyScalar(damping);
-        flyCamera.position.add(velocity);
-      } else if (cameraMode === 'orbit') {
-        orbitControls.update();
-      }
+        cam.position.add(velocity);
+        if (cameraMode === 'walk') cam.position.y = getGroundY(cam.position.x, cam.position.z) + WALK_HEIGHT;
+      } else if (cameraMode === 'orbit') orbitControls.update();
       renderer.render(scene, activeCamera);
     })();
   }
