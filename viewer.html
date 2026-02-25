@@ -24,6 +24,12 @@
     .mode-indicator { margin-top: 0.4rem; padding-top: 0.4rem; border-top: 1px solid rgba(255,255,255,0.07); color: #6b7280; font-size: 0.7rem; }
     .mode-indicator span { color: #3b82f6; font-weight: 600; }
 
+    /* Style switcher (bottom-center, above cam modes) */
+    #style-modes { position: fixed; bottom: 56px; left: 50%; transform: translateX(-50%); display: flex; gap: 4px; z-index: 10; }
+    .style-btn { padding: 0.28rem 0.65rem; font-size: 0.7rem; font-weight: 500; background: rgba(10,12,20,0.85); color: #9ca3af; border: 1px solid rgba(255,255,255,0.08); border-radius: 5px; cursor: pointer; backdrop-filter: blur(4px); transition: background 0.12s, color 0.12s, border-color 0.12s; }
+    .style-btn:hover { background: rgba(30,35,60,0.95); color: #e5e7eb; }
+    .style-btn.active { background: rgba(124,58,237,0.25); color: #a78bfa; border-color: rgba(124,58,237,0.5); }
+
     /* Camera mode buttons (bottom-center) */
     #cam-modes { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); display: flex; gap: 6px; z-index: 10; }
     .cam-btn { padding: 0.38rem 0.75rem; font-size: 0.75rem; font-weight: 500; background: rgba(10,12,20,0.85); color: #9ca3af; border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; cursor: pointer; backdrop-filter: blur(4px); transition: background 0.12s, color 0.12s, border-color 0.12s; }
@@ -39,8 +45,11 @@
     #reset-btn:hover { background: rgba(25,28,50,0.95); color: #e5e7eb; }
 
     /* Pointer-lock hint */
-    #lock-hint { position: fixed; bottom: 60px; left: 50%; transform: translateX(-50%); padding: 0.35rem 0.9rem; background: rgba(0,0,0,0.7); border-radius: 20px; font-size: 0.72rem; color: #9ca3af; pointer-events: none; opacity: 0; transition: opacity 0.3s; }
+    #lock-hint { position: fixed; bottom: 96px; left: 50%; transform: translateX(-50%); padding: 0.35rem 0.9rem; background: rgba(0,0,0,0.7); border-radius: 20px; font-size: 0.72rem; color: #9ca3af; pointer-events: none; opacity: 0; transition: opacity 0.3s; white-space: nowrap; }
     #lock-hint.visible { opacity: 1; }
+
+    /* Model title (top-center) */
+    #model-title { position: fixed; top: 10px; left: 50%; transform: translateX(-50%); font-size: 0.78rem; font-weight: 500; color: #6b7280; pointer-events: none; z-index: 10; letter-spacing: 0.03em; white-space: nowrap; }
   </style>
 </head>
 <body>
@@ -48,6 +57,8 @@
     <div class="spinner"></div>
     <p>Loading model...</p>
   </div>
+
+  <div id="model-title"></div>
 
   <div id="overlay">
     <h1>Controls</h1>
@@ -78,6 +89,15 @@
     <div class="mode-indicator">Mode: <span id="mode-label">Orbit</span></div>
   </div>
 
+  <!-- Visual style switcher -->
+  <div id="style-modes">
+    <button class="style-btn active" data-style="rendered">Rendered</button>
+    <button class="style-btn" data-style="clay">Clay</button>
+    <button class="style-btn" data-style="wireframe">Wireframe</button>
+    <button class="style-btn" data-style="xray">X-Ray</button>
+  </div>
+
+  <!-- Camera mode switcher -->
   <div id="cam-modes">
     <button class="cam-btn active" data-mode="orbit">1 &middot; Orbit</button>
     <button class="cam-btn" data-mode="walk">2 &middot; Walk</button>
@@ -86,7 +106,6 @@
   </div>
 
   <div id="lock-hint">Click to lock cursor &mdash; Esc to release</div>
-
   <button id="back-btn" onclick="window.location.href='index.html'">&#8592; Back</button>
   <button id="reset-btn" onclick="resetCamera()">&#8634; Reset</button>
 
@@ -94,10 +113,8 @@
   <script src="https://cdn.jsdelivr.net/npm/three@0.137.5/examples/js/controls/OrbitControls.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/rhino3dm@8.4.0/rhino3dm.min.js"></script>
   <script src="viewer-3dm.js"></script>
-
   <script>
     // Show/hide control hints based on active camera mode
-    // This runs after viewer-3dm.js exposes the mode via data attribute on body
     document.addEventListener('modchange', function(e) {
       document.getElementById('orbit-controls').style.display = e.detail === 'orbit' ? '' : 'none';
       document.getElementById('walk-controls').style.display = e.detail === 'walk' ? '' : 'none';
@@ -106,6 +123,14 @@
       const hint = document.getElementById('lock-hint');
       hint.classList.toggle('visible', e.detail === 'walk' || e.detail === 'fly');
     });
+    // Show model name in title bar
+    (function() {
+      const p = new URLSearchParams(window.location.search);
+      const m = p.get('model') || '';
+      const name = m.replace(/\.3dm$/i, '').replace(/[-_]/g, ' ');
+      const el = document.getElementById('model-title');
+      if (el && name) el.textContent = name;
+    })();
   </script>
 </body>
 </html>
