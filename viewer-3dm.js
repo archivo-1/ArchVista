@@ -1,1 +1,298 @@
-(function() { 'use strict'; var scene, renderer, orbitCamera, freeCamera, activeCamera, orbitControls; var freeMode = false, keys = {}, velocity = new THREE.Vector3(), moveSpeed = 15, damping = 0.88, lastTime = performance.now(); var yaw = 0, pitch = 0; function getModelFromQuery() { var p = new URLSearchParams(window.location.search); return p.get('model') || 'torpederas-valparaisoCLS.3dm'; } function showLoading() { var e = document.getElementById('loading'); if (e) e.classList.remove('hidden'); } function hideLoading() { var e = document.getElementById('loading'); if (e) e.classList.add('hidden'); } function setModeLabel(l) { var e = document.getElementById('mode-label'); if (e) e.textContent = l; } function isGlass(o) { var ln = ''; if (o.userData && o.userData.attributes) { var a = o.userData.attributes; if (typeof a.layer === 'string') ln = a.layer.toLowerCase(); } if (!ln && o.userData && typeof o.userData.layer === 'string') ln = o.userData.layer.toLowerCase(); var on = (o.name || '').toLowerCase(); var k = ['glass','window','vidrio','cristal']; for (var i=0; i<k.length; i++) { if (ln.indexOf(k[i])!==-1 || on.indexOf(k[i])!==-1) return true; } return false; } function rhinoMeshToBuffer(rm) { var g = new THREE.BufferGeometry(); var v = rm.vertices(); var vc = v.count; var pa = new Float32Array(vc*3); for (var i=0; i<vc; i++) { var pt = v.get(i); pa[i*3]=pt[0]; pa[i*3+1]=pt[1]; pa[i*3+2]=pt[2]; } g.setAttribute('position', new THREE.BufferAttribute(pa, 3)); var f = rm.faces(); var fc = f.count; var idx = []; for (var j=0; j<fc; j++) { var face = f.get(j); idx.push(face[0], face[1], face[2]); if (face[2]!==face[3]) idx.push(face[0], face[2], face[3]); } g.setIndex(idx); var n = rm.normals(); if (n && n.count===vc) { var na = new Float32Array(vc*3); for (var k=0; k<vc; k++) { var nv = n.get(k); na[k*3]=nv[0]; na[k*3+1]=nv[1]; na[k*3+2]=nv[2]; } g.setAttribute('normal', new THREE.BufferAttribute(na, 3)); } else { g.computeVertexNormals(); } return g; } function makeMat(g) { if (g) return new THREE.MeshStandardMaterial({color:0x88b4e8, roughness:0.05, metalness:0, transparent:true, opacity:0.32, side:THREE.DoubleSide}); return new THREE.MeshStandardMaterial({color:0xf0f0f0, roughness:0.55, metalness:0.05, side:THREE.DoubleSide}); } function loadModel() { var f = 'models/' + getModelFromQuery(); showLoading(); rhino3dm().then(function(r) { fetch(f).then(function(res) { if (!res.ok) throw new Error(res.status); return res.arrayBuffer(); }).then(function(b) { var doc = r.File3dm.fromByteArray(new Uint8Array(b)); if (!doc) throw new Error('Parse error'); var g = new THREE.Group(); var objs = doc.objects(); for (var i=0; i<objs.count; i++) { var obj = objs.get(i); var geo = obj.geometry(); var gl = isGlass(obj); var gt = geo.objectType; var bg, mat, mesh, tm; if (gt===r.ObjectType.Mesh) { bg=rhinoMeshToBuffer(geo); mat=makeMat(gl); mesh=new THREE.Mesh(bg, mat); mesh.castShadow=mesh.receiveShadow=true; g.add(mesh); } else if (gt===r.ObjectType.Extrusion || gt===r.ObjectType.Brep) { tm=geo.getMesh(r.MeshType.Any); if (tm) { bg=rhinoMeshToBuffer(tm); mat=makeMat(gl); mesh=new THREE.Mesh(bg, mat); mesh.castShadow=mesh.receiveShadow=true; g.add(mesh); tm.delete(); } } } scene.add(g); var box = new THREE.Box3().setFromObject(g); var c = new THREE.Vector3(), s = new THREE.Vector3(); box.getCenter(c); box.getSize(s); var m = Math.max(s.x, s.y, s.z) || 10; var d = m*2.5; orbitCamera.position.set(c.x+d, c.y+d*0.6, c.z+d); orbitCamera.lookAt(c); orbitControls.target.copy(c); orbitControls.update(); freeCamera.position.set(c.x+m*0.6, c.y+m*0.4, c.z+m*0.9); freeCamera.lookAt(c); freeCamera.rotation.order='YXZ'; yaw=freeCamera.rotation.y; pitch=freeCamera.rotation.x; doc.delete(); hideLoading(); }).catch(function(e) { console.error(e); hideLoading(); }); }).catch(function(e) { console.error(e); hideLoading(); }); } function onResize() { var w=window.innerWidth, h=window.innerHeight; orbitCamera.aspect=freeCamera.aspect=w/h; orbitCamera.updateProjectionMatrix(); freeCamera.updateProjectionMatrix(); renderer.setSize(w, h); } function onKeyDown(e) { keys[e.code]=true; if (e.code==='KeyF') { freeMode=!freeMode; activeCamera=freeMode?freeCamera:orbitCamera; setModeLabel(freeMode?'Free-Fly':'Orbit'); if (!freeMode && document.pointerLockElement===renderer.domElement) document.exitPointerLock(); orbitControls.enabled=!freeMode; } if (e.code==='Space') e.preventDefault(); } function onKeyUp(e) { keys[e.code]=false; } function onMouseMove(e) { if (!freeMode || document.pointerLockElement!==renderer.domElement) return; yaw -= e.movementX*0.0022; pitch -= e.movementY*0.0022; var limit = Math.PI/2-0.01; if (pitch>limit) pitch=limit; if (pitch<-limit) pitch=-limit; freeCamera.rotation.set(pitch, yaw, 0, 'YXZ'); } function updateFly(dt) { velocity.multiplyScalar(damping); var f=new THREE.Vector3(), r=new THREE.Vector3(); freeCamera.getWorldDirection(f); f.y=0; f.normalize(); r.crossVectors(freeCamera.up, f).normalize(); var s = moveSpeed*dt; if (keys['KeyW']) velocity.add(f.multiplyScalar(s)); if (keys['KeyS']) velocity.add(f.multiplyScalar(-s)); if (keys['KeyA']) velocity.add(r.multiplyScalar(s)); if (keys['KeyD']) velocity.add(r.multiplyScalar(-s)); if (keys['Space']) velocity.y += s; if (keys['ShiftLeft'] || keys['ShiftRight']) velocity.y -= s; freeCamera.position.add(velocity); } function animate() { requestAnimationFrame(animate); var now=performance.now(), dt=(now-lastTime)/1000; lastTime=now; if (freeMode) updateFly(dt); else orbitControls.update(); renderer.render(scene, activeCamera); } function init() { var w=window.innerWidth, h=window.innerHeight; scene=new THREE.Scene(); scene.background=new THREE.Color(0x050608); renderer=new THREE.WebGLRenderer({antialias:true}); renderer.setPixelRatio(Math.min(window.devicePixelRatio,2)); renderer.setSize(w,h); renderer.shadowMap.enabled=true; renderer.domElement.tabIndex = 1; document.body.appendChild(renderer.domElement); orbitCamera=new THREE.PerspectiveCamera(60,w/h,0.1,20000); freeCamera=new THREE.PerspectiveCamera(75,w/h,0.1,20000); activeCamera=orbitCamera; orbitControls=new THREE.OrbitControls(orbitCamera, renderer.domElement); orbitControls.enableDamping=true; scene.add(new THREE.HemisphereLight(0xffffff, 0x1a1a2e, 0.85)); var sun=new THREE.DirectionalLight(0xfff4e0, 0.9); sun.position.set(100,180,80); sun.castShadow=true; scene.add(sun); window.addEventListener('resize',onResize); window.addEventListener('keydown',onKeyDown); window.addEventListener('keyup',onKeyUp); document.addEventListener('mousemove',onMouseMove); renderer.domElement.addEventListener('click',function(){ if(freeMode && document.pointerLockElement!==renderer.domElement) renderer.domElement.requestPointerLock(); renderer.domElement.focus(); }); loadModel(); animate(); } init(); })();
+(function() {
+    'use strict';
+
+    let scene, renderer, orbitCamera, freeCamera, activeCamera, orbitControls;
+    let freeMode = false;
+    const keys = {};
+    const velocity = new THREE.Vector3();
+    const moveSpeed = 15;
+    const damping = 0.88;
+    let lastTime = performance.now();
+    let yaw = 0, pitch = 0;
+
+    function getModelFromQuery() {
+        const params = new URLSearchParams(window.location.search);
+        return params.get('model') || 'torpederas-valparaisoCLS.3dm';
+    }
+
+    function showLoading() {
+        const el = document.getElementById('loading');
+        if (el) el.classList.remove('hidden');
+    }
+
+    function hideLoading() {
+        const el = document.getElementById('loading');
+        if (el) el.classList.add('hidden');
+    }
+
+    function setModeLabel(isFree) {
+        const el = document.getElementById('mode-label');
+        if (el) el.textContent = isFree ? 'Free-Fly' : 'Orbit';
+    }
+
+    function isGlass(obj) {
+        let layerName = '';
+        if (obj.userData && obj.userData.attributes) {
+            const attr = obj.userData.attributes;
+            if (typeof attr.layer === 'string') layerName = attr.layer.toLowerCase();
+        }
+        if (!layerName && typeof obj.userData.layer === 'string') {
+            layerName = obj.userData.layer.toLowerCase();
+        }
+        
+        const name = (obj.name || '').toLowerCase();
+        const keywords = ['glass', 'window', 'vidrio', 'cristal'];
+        for (let k of keywords) {
+            if (layerName.indexOf(k) !== -1 || name.indexOf(k) !== -1) return true;
+        }
+        return false;
+    }
+
+    function rhinoMeshToBuffer(rhinoMesh) {
+        const geo = new THREE.BufferGeometry();
+        const vertices = rhinoMesh.vertices();
+        const vertexCount = vertices.count;
+        const posArray = new Float32Array(vertexCount * 3);
+        for (let i = 0; i < vertexCount; i++) {
+            const pt = vertices.get(i);
+            posArray[i * 3] = pt[0];
+            posArray[i * 3 + 1] = pt[1];
+            posArray[i * 3 + 2] = pt[2];
+        }
+        geo.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
+
+        const faces = rhinoMesh.faces();
+        const faceCount = faces.count;
+        const indices = [];
+        for (let j = 0; j < faceCount; j++) {
+            const face = faces.get(j);
+            indices.push(face[0], face[1], face[2]);
+            if (face[2] !== face[3]) {
+                indices.push(face[0], face[2], face[3]);
+            }
+        }
+        geo.setIndex(indices);
+
+        const normals = rhinoMesh.normals();
+        if (normals && normals.count === vertexCount) {
+            const normArray = new Float32Array(vertexCount * 3);
+            for (let k = 0; k < vertexCount; k++) {
+                const nv = normals.get(k);
+                normArray[k * 3] = nv[0];
+                normArray[k * 3 + 1] = nv[1];
+                normArray[k * 3 + 2] = nv[2];
+            }
+            geo.setAttribute('normal', new THREE.BufferAttribute(normArray, 3));
+        } else {
+            geo.computeVertexNormals();
+        }
+        return geo;
+    }
+
+    function makeMat(isGl) {
+        if (isGl) {
+            return new THREE.MeshStandardMaterial({
+                color: 0x88b4e8,
+                roughness: 0.05,
+                metalness: 0,
+                transparent: true,
+                opacity: 0.32,
+                side: THREE.DoubleSide
+            });
+        }
+        return new THREE.MeshStandardMaterial({
+            color: 0xf0f0f0,
+            roughness: 0.55,
+            metalness: 0.05,
+            side: THREE.DoubleSide
+        });
+    }
+
+    function loadModel() {
+        const file = 'models/' + getModelFromQuery();
+        showLoading();
+
+        rhino3dm().then(async rhino => {
+            try {
+                const response = await fetch(file);
+                if (!response.ok) throw new Error('Model not found');
+                const buffer = await response.arrayBuffer();
+                const doc = rhino.File3dm.fromByteArray(new Uint8Array(buffer));
+                if (!doc) throw new Error('Failed to parse 3DM');
+
+                const group = new THREE.Group();
+                const objects = doc.objects();
+                
+                for (let i = 0; i < objects.count; i++) {
+                    const obj = objects.get(i);
+                    const geometry = obj.geometry();
+                    const gl = isGlass(obj);
+                    
+                    if (geometry.objectType === rhino.ObjectType.Mesh) {
+                        const bufferGeo = rhinoMeshToBuffer(geometry);
+                        const mesh = new THREE.Mesh(bufferGeo, makeMat(gl));
+                        mesh.castShadow = true;
+                        mesh.receiveShadow = true;
+                        group.add(mesh);
+                    } else if (geometry.objectType === rhino.ObjectType.Extrusion || geometry.objectType === rhino.ObjectType.Brep) {
+                        const rhinoMesh = geometry.getMesh(rhino.MeshType.Any);
+                        if (rhinoMesh) {
+                            const bufferGeo = rhinoMeshToBuffer(rhinoMesh);
+                            const mesh = new THREE.Mesh(bufferGeo, makeMat(gl));
+                            mesh.castShadow = true;
+                            mesh.receiveShadow = true;
+                            group.add(mesh);
+                            rhinoMesh.delete();
+                        }
+                    }
+                }
+
+                scene.add(group);
+                
+                const box = new THREE.Box3().setFromObject(group);
+                const center = new THREE.Vector3();
+                const size = new THREE.Vector3();
+                box.getCenter(center);
+                box.getSize(size);
+                
+                const maxDim = Math.max(size.x, size.y, size.z) || 10;
+                const dist = maxDim * 2.5;
+                
+                orbitCamera.position.set(center.x + dist, center.y + dist * 0.6, center.z + dist);
+                orbitCamera.lookAt(center);
+                orbitControls.target.copy(center);
+                orbitControls.update();
+                
+                freeCamera.position.set(center.x + maxDim * 0.6, center.y + maxDim * 0.4, center.z + maxDim * 0.9);
+                freeCamera.lookAt(center);
+                freeCamera.rotation.order = 'YXZ';
+                yaw = freeCamera.rotation.y;
+                pitch = freeCamera.rotation.x;
+                
+                doc.delete();
+                hideLoading();
+            } catch (err) {
+                console.error(err);
+                hideLoading();
+            }
+        });
+    }
+
+    function onResize() {
+        const w = window.innerWidth, h = window.innerHeight;
+        orbitCamera.aspect = freeCamera.aspect = w / h;
+        orbitCamera.updateProjectionMatrix();
+        freeCamera.updateProjectionMatrix();
+        renderer.setSize(w, h);
+    }
+
+    function onKeyDown(e) {
+        keys[e.code] = true;
+        if (e.code === 'KeyF') {
+            freeMode = !freeMode;
+            activeCamera = freeMode ? freeCamera : orbitCamera;
+            setModeLabel(freeMode);
+            if (!freeMode && document.pointerLockElement === renderer.domElement) {
+                document.exitPointerLock();
+            }
+            orbitControls.enabled = !freeMode;
+        }
+        if (e.code === 'Space') e.preventDefault();
+    }
+
+    function onKeyUp(e) {
+        keys[e.code] = false;
+    }
+
+    function onMouseMove(e) {
+        if (!freeMode || document.pointerLockElement !== renderer.domElement) return;
+        
+        yaw -= e.movementX * 0.0022;
+        pitch -= e.movementY * 0.0022;
+        
+        const limit = Math.PI / 2 - 0.01;
+        if (pitch > limit) pitch = limit;
+        if (pitch < -limit) pitch = -limit;
+        
+        freeCamera.rotation.set(pitch, yaw, 0, 'YXZ');
+    }
+
+    function updateFly(dt) {
+        velocity.multiplyScalar(damping);
+        const forward = new THREE.Vector3();
+        const right = new THREE.Vector3();
+        
+        freeCamera.getWorldDirection(forward);
+        forward.y = 0;
+        forward.normalize();
+        
+        right.crossVectors(THREE.Object3D.DEFAULT_UP, forward).normalize();
+        
+        const s = moveSpeed * dt;
+        if (keys['KeyW']) velocity.add(forward.multiplyScalar(s));
+        if (keys['KeyS']) velocity.add(forward.multiplyScalar(-s));
+        if (keys['KeyA']) velocity.add(right.multiplyScalar(s));
+        if (keys['KeyD']) velocity.add(right.multiplyScalar(-s));
+        if (keys['KeySpace']) velocity.y += s;
+        if (keys['ShiftLeft'] || keys['ShiftRight']) velocity.y -= s;
+        
+        freeCamera.position.add(velocity);
+    }
+
+    function animate() {
+        requestAnimationFrame(animate);
+        const now = performance.now();
+        const dt = (now - lastTime) / 1000;
+        lastTime = now;
+
+        if (freeMode) {
+            updateFly(dt);
+        } else {
+            orbitControls.update();
+        }
+        renderer.render(scene, activeCamera);
+    }
+
+    function init() {
+        const w = window.innerWidth, h = window.innerHeight;
+        scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x050608);
+
+        renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.setSize(w, h);
+        renderer.shadowMap.enabled = true;
+        renderer.domElement.tabIndex = 1;
+        document.body.appendChild(renderer.domElement);
+
+        orbitCamera = new THREE.PerspectiveCamera(60, w / h, 0.1, 20000);
+        freeCamera = new THREE.PerspectiveCamera(75, w / h, 0.1, 20000);
+        activeCamera = orbitCamera;
+
+        orbitControls = new THREE.OrbitControls(orbitCamera, renderer.domElement);
+        orbitControls.enableDamping = true;
+
+        scene.add(new THREE.HemisphereLight(0xffffff, 0x1a1a2e, 0.85));
+        const sun = new THREE.DirectionalLight(0xfff4e0, 0.9);
+        sun.position.set(100, 180, 80);
+        sun.castShadow = true;
+        scene.add(sun);
+
+        window.addEventListener('resize', onResize);
+        window.addEventListener('keydown', onKeyDown);
+        window.addEventListener('keyup', onKeyUp);
+        window.addEventListener('mousemove', onMouseMove);
+
+        renderer.domElement.addEventListener('click', () => {
+            if (freeMode) {
+                renderer.domElement.requestPointerLock();
+                renderer.domElement.focus();
+            }
+        });
+
+        loadModel();
+        animate();
+    }
+
+    init();
+})();
