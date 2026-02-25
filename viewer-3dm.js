@@ -1,8 +1,4 @@
-import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.176.0/build/three.module.js';
-import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.176.0/examples/jsm/controls/OrbitControls.js';
-import { Rhino3dmLoader } from 'https://cdn.jsdelivr.net/npm/three@0.176.0/examples/jsm/loaders/3DMLoader.js';
-
-(function () {
+(function() {
     'use strict';
 
     let scene, renderer, orbitCamera, freeCamera, activeCamera, orbitControls;
@@ -35,33 +31,163 @@ import { Rhino3dmLoader } from 'https://cdn.jsdelivr.net/npm/three@0.176.0/examp
         if (el) el.textContent = isFree ? 'Free-Fly' : 'Orbit';
     }
 
+    function makeMeshMat() {
+        return new THREE.MeshStandardMaterial({
+            color: 0xdddddd, roughness: 0.65, metalness: 0.05,
+            side: THREE.DoubleSide
+        });
+    }
+
+    function makeLineMat() {
+        return new THREE.LineBasicMaterial({ color: 0x88aaff });
+    }
+
+    // Port logic from Three.js 3DMLoader's worker decodeObjects function
+    function convertRhinoObject(obj, rhino) {
+        const geom = obj.geometry();
+        const objType = geom.objectType;
+        const typeName = objType && objType.constructor ? objType.constructor.name : 'Unknown';
+        
+        console.log('Object type:', typeName);
+
+        const loader = new THREE.BufferGeometryLoader();
+        let geometry = null;
+
+        try {
+            // Mesh or PointSet — direct toThreejsJSON
+            if (typeName === 'ObjectType_Mesh' || typeName === 'ObjectType_PointSet') {
+                geometry = loader.parse(JSON.parse(geom.toThreejsJSON()));
+                const mesh = new THREE.Mesh(geometry, makeMeshMat());
+                return [mesh];
+            }
+
+            // Brep — iterate faces and combine meshes
+            if (typeName === 'ObjectType_Brep') {
+                const faces = geom.faces();
+                const combinedMesh = new rhino.Mesh();
+                for (let i = 0; i < faces.count; i++) {
+                    const face = faces.get(i);
+                    const faceMesh = face.getMesh(rhino.MeshType.Any);
+                    if (faceMesh) {
+                        combinedMesh.append(faceMesh);
+                        faceMesh.delete();
+                    }
+                    face.delete();
+                }
+                faces.delete();
+                if (combinedMesh.faces().count > 0) {
+                    combinedMesh.compact();
+                    geometry = loader.parse(JSON.parse(combinedMesh.toThreejsJSON()));
+                    combinedMesh.delete();
+                    const mesh = new THREE.Mesh(geometry, makeMeshMat());
+                    return [mesh];
+                }
+                combinedMesh.delete();
+            }
+
+            // Extrusion — getMesh
+            if (typeName === 'ObjectType_Extrusion') {
+                const extMesh = geom.getMesh(rhino.MeshType.Any);
+                if (extMesh) {
+                    geometry = loader.parse(JSON.parse(extMesh.toThreejsJSON()));
+                    extMesh.delete();
+                    const mesh = new THREE.Mesh(geometry, makeMeshMat());
+                    return [mesh];
+                }
+            }
+
+            // SubD — subdivide + createFromSubDControlNet
+            if (typeName === 'ObjectType_SubD') {
+                geom.subdivide(3);
+                const subDMesh = rhino.Mesh.createFromSubDControlNet(geom);
+                if (subDMesh) {
+                    geometry = loader.parse(JSON.parse(subDMesh.toThreejsJSON()));
+                    subDMesh.delete();
+                    const mesh = new THREE.Mesh(geometry, makeMeshMat());
+                    return [mesh];
+                }
+            }
+
+            // Curve — sample points
+            if (typeName === 'ObjectType_Curve') {
+                const pts = [];
+                const domain = geom.domain;
+                if (domain) {
+                    const steps = 80;
+                    const t0 = domain[0], t1 = domain[1];
+                    for (let s = 0; s <= steps; s++) {
+                        const t = t0 + (t1 - t0) * (s / steps);
+                        const pt = geom.pointAt(t);
+                        if (pt) pts.push(new THREE.Vector3(pt[0], pt[1], pt[2]));
+                    }
+                }
+                if (pts.length >= 2) {
+                    const lineGeom = new THREE.BufferGeometry().setFromPoints(pts);
+                    const line = new THREE.Line(lineGeom, makeLineMat());
+                    return [line];
+                }
+            }
+
+            // Point — single point
+            if (typeName === 'ObjectType_Point') {
+                const pt = geom.location;
+                if (pt) {
+                    const pointGeom = new THREE.BufferGeometry();
+                    pointGeom.setAttribute('position', new THREE.Float32BufferAttribute(pt, 3));
+                    const mat = new THREE.PointsMaterial({ color: 0xffaa00, size: 3, sizeAttenuation: false });
+                    const points = new THREE.Points(pointGeom, mat);
+                    return [points];
+                }
+            }
+
+        } catch (e) {
+            console.warn('Error converting', typeName, ':', e.message);
+        }
+
+        return [];
+    }
+
     function loadModel() {
         const name = getModelFromQuery();
         showLoading('Downloading ' + name + '...');
+        rhino3dm().then(async function(rhino) {
+            try {
+                const res = await fetch('models/' + name);
+                if (!res.ok) throw new Error('HTTP ' + res.status + ': model not found');
+                const buf = await res.arrayBuffer();
+                showLoading('Parsing geometry...');
+                const doc = rhino.File3dm.fromByteArray(new Uint8Array(buf));
+                if (!doc) throw new Error('Could not parse Rhino document');
 
-        const loader = new Rhino3dmLoader();
-        loader.setLibraryPath('https://cdn.jsdelivr.net/npm/rhino3dm@8.4.0/');
+                const group = new THREE.Group();
+                const objs = doc.objects();
+                const total = objs.count;
+                console.log('Object count:', total);
 
-        loader.load(
-            'models/' + name,
-            function (object) {
-                // Make all objects visible regardless of layer visibility
-                object.traverse(function (child) {
-                    child.visible = true;
-                    // Ensure double-sided rendering for all meshes
-                    if (child.isMesh && child.material) {
-                        if (Array.isArray(child.material)) {
-                            child.material.forEach(function (m) { m.side = THREE.DoubleSide; });
-                        } else {
-                            child.material.side = THREE.DoubleSide;
-                        }
+                for (let i = 0; i < total; i++) {
+                    try {
+                        const obj = objs.get(i);
+                        if (!obj) continue;
+                        const threeObjs = convertRhinoObject(obj, rhino);
+                        threeObjs.forEach(function(o) {
+                            o.visible = true; // Override layer visibility
+                            group.add(o);
+                        });
+                    } catch (e2) {
+                        console.warn('Skipping object ' + i + ':', e2.message);
                     }
-                });
+                }
 
-                scene.add(object);
+                doc.delete();
+                console.log('Rendered objects:', group.children.length, '/', total);
 
-                // Fit camera to model
-                const box = new THREE.Box3().setFromObject(object);
+                if (group.children.length === 0) {
+                    throw new Error('No renderable geometry found in model (' + total + ' objects parsed)');
+                }
+
+                scene.add(group);
+
+                const box = new THREE.Box3().setFromObject(group);
                 const center = new THREE.Vector3();
                 const size = new THREE.Vector3();
                 box.getCenter(center);
@@ -86,20 +212,11 @@ import { Rhino3dmLoader } from 'https://cdn.jsdelivr.net/npm/three@0.176.0/examp
                 freeCamera.updateProjectionMatrix();
 
                 hideLoading();
-            },
-            function (xhr) {
-                if (xhr.total > 0) {
-                    const pct = Math.round((xhr.loaded / xhr.total) * 100);
-                    showLoading('Loading ' + name + '... ' + pct + '%');
-                } else {
-                    showLoading('Parsing ' + name + '...');
-                }
-            },
-            function (error) {
-                console.error(error);
-                showLoading('Error: ' + (error.message || String(error)));
+            } catch (e) {
+                console.error(e);
+                showLoading('Error: ' + e.message);
             }
-        );
+        });
     }
 
     function init() {
@@ -116,7 +233,7 @@ import { Rhino3dmLoader } from 'https://cdn.jsdelivr.net/npm/three@0.176.0/examp
         freeCamera.rotation.order = 'YXZ';
         activeCamera = orbitCamera;
 
-        orbitControls = new OrbitControls(orbitCamera, renderer.domElement);
+        orbitControls = new THREE.OrbitControls(orbitCamera, renderer.domElement);
         orbitControls.enableDamping = true;
 
         scene.add(new THREE.AmbientLight(0xffffff, 0.8));
@@ -127,7 +244,7 @@ import { Rhino3dmLoader } from 'https://cdn.jsdelivr.net/npm/three@0.176.0/examp
         sun2.position.set(-2, -1, -1);
         scene.add(sun2);
 
-        window.addEventListener('resize', function () {
+        window.addEventListener('resize', function() {
             const w = window.innerWidth, h = window.innerHeight;
             renderer.setSize(w, h);
             orbitCamera.aspect = freeCamera.aspect = w / h;
@@ -135,7 +252,7 @@ import { Rhino3dmLoader } from 'https://cdn.jsdelivr.net/npm/three@0.176.0/examp
             freeCamera.updateProjectionMatrix();
         });
 
-        window.addEventListener('keydown', function (e) {
+        window.addEventListener('keydown', function(e) {
             keys[e.code] = true;
             if (e.code === 'KeyF') {
                 freeMode = !freeMode;
@@ -148,11 +265,11 @@ import { Rhino3dmLoader } from 'https://cdn.jsdelivr.net/npm/three@0.176.0/examp
             if (e.code === 'Space') e.preventDefault();
         });
 
-        window.addEventListener('keyup', function (e) {
+        window.addEventListener('keyup', function(e) {
             keys[e.code] = false;
         });
 
-        window.addEventListener('mousemove', function (e) {
+        window.addEventListener('mousemove', function(e) {
             if (!freeMode || document.pointerLockElement !== renderer.domElement) return;
             yaw -= e.movementX * 0.002;
             pitch -= e.movementY * 0.002;
@@ -160,7 +277,7 @@ import { Rhino3dmLoader } from 'https://cdn.jsdelivr.net/npm/three@0.176.0/examp
             freeCamera.rotation.set(pitch, yaw, 0, 'YXZ');
         });
 
-        renderer.domElement.addEventListener('click', function () {
+        renderer.domElement.addEventListener('click', function() {
             if (freeMode) renderer.domElement.requestPointerLock();
         });
 
