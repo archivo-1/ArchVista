@@ -1,5 +1,4 @@
 // viewer-3dm.js – Rhino .3dm viewer using Rhino3dmLoader and CDN
-// Three.js + Rhino3dmLoader docs: Rhino3dmLoader – three.js docs[web:91]
 
 import * as THREE from "https://unpkg.com/three@0.161.0/build/three.module.js";
 import { OrbitControls } from "https://unpkg.com/three@0.161.0/examples/jsm/controls/OrbitControls.js";
@@ -54,7 +53,6 @@ function init() {
   orbitControls.minDistance = 5;
   orbitControls.maxDistance = 2000;
 
-  // Lighting
   const hemiLight = new THREE.HemisphereLight(0xffffff, 0x202020, 0.8);
   scene.add(hemiLight);
 
@@ -62,7 +60,6 @@ function init() {
   dirLight.position.set(80, 120, 60);
   scene.add(dirLight);
 
-  // Base ground (off for now)
   const groundGeo = new THREE.PlaneGeometry(3000, 3000);
   const groundMat = new THREE.MeshStandardMaterial({
     color: 0x181822,
@@ -92,26 +89,35 @@ function init() {
 
 function loadRhinoModel() {
   const loader = new Rhino3dmLoader();
-  loader.setLibraryPath("https://unpkg.com/rhino3dm/"); // CDN for rhino3dm WASM[web:91][web:94]
+  loader.setLibraryPath("https://unpkg.com/rhino3dm/");
 
   const modelFile = "models/" + getModelFromQuery();
 
   loader.load(
     modelFile,
     (object) => {
-      // object is a THREE.Group containing meshes from Rhino geometry[web:91]
       object.traverse((child) => {
         if (child.isMesh) {
           child.castShadow = true;
           child.receiveShadow = true;
 
           let isGlass = false;
-          const matName = (child.material && child.material.name) ? child.material.name.toLowerCase() : "";
-          const layerName = (child.userData && child.userData.attributes && child.userData.attributes.layer)
-            ? String(child.userData.attributes.layer).toLowerCase()
-            : "";
+          const matName =
+            child.material && child.material.name
+              ? child.material.name.toLowerCase()
+              : "";
+          const layerName =
+            child.userData &&
+            child.userData.attributes &&
+            child.userData.attributes.layer
+              ? String(child.userData.attributes.layer).toLowerCase()
+              : "";
 
-          if (matName.includes("glass") || layerName.includes("glass") || layerName.includes("window")) {
+          if (
+            matName.includes("glass") ||
+            layerName.includes("glass") ||
+            layerName.includes("window")
+          ) {
             isGlass = true;
           }
 
@@ -127,7 +133,6 @@ function loadRhinoModel() {
 
       scene.add(object);
 
-      // Frame model
       const box = new THREE.Box3().setFromObject(object);
       const center = box.getCenter(new THREE.Vector3());
       const size = box.getSize(new THREE.Vector3());
@@ -135,13 +140,17 @@ function loadRhinoModel() {
 
       const fitDistance = maxDim * 1.6;
       orbitCamera.position.copy(
-        center.clone().add(new THREE.Vector3(fitDistance, fitDistance * 0.75, fitDistance))
+        center.clone().add(
+          new THREE.Vector3(fitDistance, fitDistance * 0.75, fitDistance)
+        )
       );
       orbitCamera.lookAt(center);
       orbitControls.target.copy(center);
 
       freeCamera.position.copy(
-        center.clone().add(new THREE.Vector3(maxDim * 0.3, maxDim * 0.2, maxDim * 0.6))
+        center.clone().add(
+          new THREE.Vector3(maxDim * 0.3, maxDim * 0.2, maxDim * 0.6)
+        )
       );
       freeCamera.lookAt(center);
     },
