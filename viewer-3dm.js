@@ -1,4 +1,8 @@
-(function() {
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.176.0/build/three.module.js';
+import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.176.0/examples/jsm/controls/OrbitControls.js';
+import { Rhino3dmLoader } from 'https://cdn.jsdelivr.net/npm/three@0.176.0/examples/jsm/loaders/3DMLoader.js';
+
+(function () {
     'use strict';
 
     let scene, renderer, orbitCamera, freeCamera, activeCamera, orbitControls;
@@ -31,153 +35,33 @@
         if (el) el.textContent = isFree ? 'Free-Fly' : 'Orbit';
     }
 
-    function makeMeshMat() {
-        return new THREE.MeshStandardMaterial({
-            color: 0xdddddd, roughness: 0.65, metalness: 0.05,
-            side: THREE.DoubleSide
-        });
-    }
-
-    function makeLineMat() {
-        return new THREE.LineBasicMaterial({ color: 0x88aaff });
-    }
-
-    // Robust conversion: tries every known strategy on every object
-    function rhinoGeomToThreeObjs(geom, rhino) {
-        const results = [];
-
-        // --- Strategy 1: toThreejsJSON (works for Mesh natively) ---
-        if (typeof geom.toThreejsJSON === 'function') {
-            try {
-                const json = geom.toThreejsJSON();
-                const parsed = (typeof json === 'string') ? JSON.parse(json) : json;
-                if (parsed && parsed.data && parsed.data.attributes) {
-                    const loader = new THREE.BufferGeometryLoader();
-                    const geo = loader.parse(parsed);
-                    if (geo) {
-                        results.push(new THREE.Mesh(geo, makeMeshMat()));
-                        return results;
-                    }
-                }
-            } catch(e) {
-                console.warn('toThreejsJSON failed:', e.message);
-            }
-        }
-
-        // --- Strategy 2: getMesh with MeshType.Any (Brep, Extrusion, Surface) ---
-        if (typeof geom.getMesh === 'function') {
-            const meshTypes = [];
-            try { meshTypes.push(rhino.MeshType.Any); } catch(e) {}
-            try { meshTypes.push(rhino.MeshType.Default); } catch(e) {}
-            try { meshTypes.push(rhino.MeshType.Render); } catch(e) {}
-            // Also try numeric values used by rhino3dm
-            meshTypes.push(0, 1, 2, 3, 4);
-            for (let mi = 0; mi < meshTypes.length; mi++) {
-                try {
-                    const rm = geom.getMesh(meshTypes[mi]);
-                    if (rm && typeof rm.toThreejsJSON === 'function') {
-                        const json = rm.toThreejsJSON();
-                        const parsed = (typeof json === 'string') ? JSON.parse(json) : json;
-                        if (parsed && parsed.data && parsed.data.attributes) {
-                            const loader = new THREE.BufferGeometryLoader();
-                            const geo = loader.parse(parsed);
-                            if (geo) {
-                                results.push(new THREE.Mesh(geo, makeMeshMat()));
-                                rm.delete();
-                                return results;
-                            }
-                        }
-                        try { rm.delete(); } catch(e) {}
-                    }
-                } catch(e) {}
-            }
-        }
-
-        // --- Strategy 3: Curve sampling via domain + pointAt ---
-        if (typeof geom.domain !== 'undefined' && typeof geom.pointAt === 'function') {
-            try {
-                const domain = geom.domain;
-                const t0 = (domain && typeof domain.min !== 'undefined') ? domain.min : 0;
-                const t1 = (domain && typeof domain.max !== 'undefined') ? domain.max : 1;
-                if (t1 > t0) {
-                    const pts = [];
-                    const steps = 80;
-                    for (let s = 0; s <= steps; s++) {
-                        const t = t0 + (t1 - t0) * (s / steps);
-                        try {
-                            const pt = geom.pointAt(t);
-                            if (pt && pt.length >= 3) pts.push(new THREE.Vector3(pt[0], pt[1], pt[2]));
-                        } catch(e) {}
-                    }
-                    if (pts.length >= 2) {
-                        const geo = new THREE.BufferGeometry().setFromPoints(pts);
-                        results.push(new THREE.Line(geo, makeLineMat()));
-                        return results;
-                    }
-                }
-            } catch(e) {
-                console.warn('Curve sampling failed:', e.message);
-            }
-        }
-
-        // --- Strategy 4: PointCloud / single point ---
-        if (typeof geom.location !== 'undefined') {
-            try {
-                const loc = geom.location;
-                if (loc && loc.length >= 3) {
-                    const geo = new THREE.BufferGeometry();
-                    geo.setAttribute('position', new THREE.Float32BufferAttribute([loc[0], loc[1], loc[2]], 3));
-                    const mat = new THREE.PointsMaterial({ color: 0xffaa00, size: 0.5 });
-                    results.push(new THREE.Points(geo, mat));
-                    return results;
-                }
-            } catch(e) {}
-        }
-
-        return results;
-    }
-
     function loadModel() {
         const name = getModelFromQuery();
         showLoading('Downloading ' + name + '...');
-        rhino3dm().then(async function(rhino) {
-            try {
-                const res = await fetch('models/' + name);
-                if (!res.ok) throw new Error('HTTP ' + res.status + ': model not found');
-                const buf = await res.arrayBuffer();
-                showLoading('Parsing geometry...');
-                const doc = rhino.File3dm.fromByteArray(new Uint8Array(buf));
-                if (!doc) throw new Error('Could not parse Rhino document');
 
-                const group = new THREE.Group();
-                const objs = doc.objects();
-                const total = objs.count;
-                console.log('Object count:', total);
+        const loader = new Rhino3dmLoader();
+        loader.setLibraryPath('https://cdn.jsdelivr.net/npm/rhino3dm@8.4.0/');
 
-                for (let i = 0; i < total; i++) {
-                    try {
-                        const obj = objs.get(i);
-                        if (!obj) continue;
-                        const geom = obj.geometry();
-                        if (!geom) continue;
-                        console.log('Object', i, 'objectType:', geom.objectType);
-                        const threeObjs = rhinoGeomToThreeObjs(geom, rhino);
-                        threeObjs.forEach(function(o) { group.add(o); });
-                    } catch (e2) {
-                        console.warn('Skipping object ' + i + ':', e2.message);
+        loader.load(
+            'models/' + name,
+            function (object) {
+                // Make all objects visible regardless of layer visibility
+                object.traverse(function (child) {
+                    child.visible = true;
+                    // Ensure double-sided rendering for all meshes
+                    if (child.isMesh && child.material) {
+                        if (Array.isArray(child.material)) {
+                            child.material.forEach(function (m) { m.side = THREE.DoubleSide; });
+                        } else {
+                            child.material.side = THREE.DoubleSide;
+                        }
                     }
-                }
+                });
 
-                doc.delete();
-                console.log('Group children:', group.children.length, '/', total);
+                scene.add(object);
 
-                if (group.children.length === 0) {
-                    throw new Error('No renderable geometry found in model (' + total + ' objects parsed)');
-                }
-
-                scene.add(group);
-
-                const box = new THREE.Box3().setFromObject(group);
+                // Fit camera to model
+                const box = new THREE.Box3().setFromObject(object);
                 const center = new THREE.Vector3();
                 const size = new THREE.Vector3();
                 box.getCenter(center);
@@ -202,11 +86,20 @@
                 freeCamera.updateProjectionMatrix();
 
                 hideLoading();
-            } catch (e) {
-                console.error(e);
-                showLoading('Error: ' + e.message);
+            },
+            function (xhr) {
+                if (xhr.total > 0) {
+                    const pct = Math.round((xhr.loaded / xhr.total) * 100);
+                    showLoading('Loading ' + name + '... ' + pct + '%');
+                } else {
+                    showLoading('Parsing ' + name + '...');
+                }
+            },
+            function (error) {
+                console.error(error);
+                showLoading('Error: ' + (error.message || String(error)));
             }
-        });
+        );
     }
 
     function init() {
@@ -223,7 +116,7 @@
         freeCamera.rotation.order = 'YXZ';
         activeCamera = orbitCamera;
 
-        orbitControls = new THREE.OrbitControls(orbitCamera, renderer.domElement);
+        orbitControls = new OrbitControls(orbitCamera, renderer.domElement);
         orbitControls.enableDamping = true;
 
         scene.add(new THREE.AmbientLight(0xffffff, 0.8));
@@ -234,7 +127,7 @@
         sun2.position.set(-2, -1, -1);
         scene.add(sun2);
 
-        window.addEventListener('resize', function() {
+        window.addEventListener('resize', function () {
             const w = window.innerWidth, h = window.innerHeight;
             renderer.setSize(w, h);
             orbitCamera.aspect = freeCamera.aspect = w / h;
@@ -242,7 +135,7 @@
             freeCamera.updateProjectionMatrix();
         });
 
-        window.addEventListener('keydown', function(e) {
+        window.addEventListener('keydown', function (e) {
             keys[e.code] = true;
             if (e.code === 'KeyF') {
                 freeMode = !freeMode;
@@ -255,11 +148,11 @@
             if (e.code === 'Space') e.preventDefault();
         });
 
-        window.addEventListener('keyup', function(e) {
+        window.addEventListener('keyup', function (e) {
             keys[e.code] = false;
         });
 
-        window.addEventListener('mousemove', function(e) {
+        window.addEventListener('mousemove', function (e) {
             if (!freeMode || document.pointerLockElement !== renderer.domElement) return;
             yaw -= e.movementX * 0.002;
             pitch -= e.movementY * 0.002;
@@ -267,7 +160,7 @@
             freeCamera.rotation.set(pitch, yaw, 0, 'YXZ');
         });
 
-        renderer.domElement.addEventListener('click', function() {
+        renderer.domElement.addEventListener('click', function () {
             if (freeMode) renderer.domElement.requestPointerLock();
         });
 
