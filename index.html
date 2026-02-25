@@ -1,147 +1,372 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ArchVista - 3D Model Library</title>
-    <style>
-        * { box-sizing: border-box; }
-        body {
-            margin: 0;
-            font-family: system-ui, -apple-system, sans-serif;
-            background: #0b0c10;
-            color: #f5f5f5;
-            display: flex;
-            flex-direction: column;
-            min-height: 100vh;
-        }
-        header {
-            padding: 1.25rem 1.75rem;
-            border-bottom: 1px solid #1e2030;
-            display: flex;
-            align-items: baseline;
-            gap: 0.75rem;
-        }
-        header h1 {
-            margin: 0;
-            font-size: 1.25rem;
-            font-weight: 700;
-            letter-spacing: -0.01em;
-        }
-        header span {
-            font-size: 0.8rem;
-            color: #6b7280;
-        }
-        main {
-            padding: 2rem 1.75rem;
-            flex: 1;
-            max-width: 900px;
-            width: 100%;
-            margin: 0 auto;
-        }
-        .section-label {
-            font-size: 0.75rem;
-            text-transform: uppercase;
-            letter-spacing: 0.08em;
-            color: #6b7280;
-            margin: 0 0 1rem 0;
-        }
-        .model-card {
-            background: #13141c;
-            border: 1px solid #1e2030;
-            border-radius: 10px;
-            padding: 1.25rem 1.5rem;
-            margin-bottom: 1rem;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 1rem;
-            transition: border-color 0.15s, background 0.15s;
-            cursor: pointer;
-        }
-        .model-card:hover {
-            background: #181924;
-            border-color: #2e3148;
-        }
-        .model-info {
-            flex: 1;
-            min-width: 0;
-        }
-        .model-title {
-            margin: 0 0 0.3rem 0;
-            font-size: 1rem;
-            font-weight: 600;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-        .model-desc {
-            margin: 0;
-            font-size: 0.82rem;
-            color: #9ca3af;
-            line-height: 1.45;
-        }
-        .model-meta {
-            font-size: 0.75rem;
-            color: #4b5563;
-            margin: 0.35rem 0 0 0;
-        }
-        .btn-open {
-            flex-shrink: 0;
-            background: #2563eb;
-            color: #fff;
-            border: none;
-            border-radius: 7px;
-            padding: 0.5rem 1.1rem;
-            font-size: 0.85rem;
-            font-weight: 500;
-            cursor: pointer;
-            white-space: nowrap;
-            transition: background 0.15s;
-            pointer-events: none;
-        }
-        .model-card:hover .btn-open {
-            background: #3b82f6;
-        }
-        footer {
-            padding: 1rem 1.75rem;
-            font-size: 0.72rem;
-            color: #374151;
-            border-top: 1px solid #1a1b26;
-            text-align: center;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ArchVista</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:        #050608;
+      --surface:   #0d1117;
+      --border:    rgba(255,255,255,0.07);
+      --text:      #e5e7eb;
+      --muted:     #6b7280;
+      --accent:    #3b82f6;
+      --accent-dim:rgba(59,130,246,0.15);
+    }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    /* ── Header ───────────────────────────────────────────── */
+    header {
+      padding: 1.4rem 2rem;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+    }
+    .logo { display: flex; align-items: baseline; gap: 0.5rem; }
+    .logo h1 { font-size: 1.35rem; font-weight: 700; letter-spacing: -0.02em; color: #f9fafb; }
+    .logo span { font-size: 0.78rem; color: var(--muted); }
+    .search-wrap {
+      flex: 1; max-width: 360px;
+      position: relative;
+    }
+    .search-wrap input {
+      width: 100%;
+      padding: 0.45rem 0.85rem 0.45rem 2.2rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 0.82rem;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .search-wrap input:focus { border-color: rgba(59,130,246,0.5); }
+    .search-wrap svg {
+      position: absolute; left: 0.65rem; top: 50%; transform: translateY(-50%);
+      width: 14px; height: 14px; color: var(--muted); pointer-events: none;
+    }
+    /* ── Category tabs ────────────────────────────────────── */
+    .filters {
+      padding: 0.9rem 2rem 0;
+      display: flex;
+      gap: 0.4rem;
+      flex-wrap: wrap;
+      border-bottom: 1px solid var(--border);
+    }
+    .filter-btn {
+      padding: 0.35rem 0.85rem;
+      font-size: 0.78rem;
+      font-weight: 500;
+      background: transparent;
+      color: var(--muted);
+      border: 1px solid transparent;
+      border-radius: 20px;
+      cursor: pointer;
+      transition: all 0.12s;
+      margin-bottom: 0.9rem;
+    }
+    .filter-btn:hover { color: var(--text); border-color: var(--border); }
+    .filter-btn.active {
+      background: var(--accent-dim);
+      color: #93c5fd;
+      border-color: rgba(59,130,246,0.3);
+    }
+    /* ── Main grid ──────────────────────────────────────────── */
+    main {
+      flex: 1;
+      padding: 2rem;
+      max-width: 1200px;
+      width: 100%;
+      margin: 0 auto;
+    }
+    .grid-label {
+      font-size: 0.72rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 1.2rem;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 1.2rem;
+    }
+    /* ── Card ───────────────────────────────────────────────── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      cursor: pointer;
+      transition: border-color 0.15s, transform 0.15s, box-shadow 0.15s;
+      display: flex;
+      flex-direction: column;
+    }
+    .card:hover {
+      border-color: rgba(59,130,246,0.35);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.35);
+    }
+    .card-thumb {
+      width: 100%; aspect-ratio: 16/9;
+      background: #0a0e18;
+      display: flex; align-items: center; justify-content: center;
+      overflow: hidden;
+      position: relative;
+    }
+    .card-thumb img { width: 100%; height: 100%; object-fit: cover; }
+    .card-thumb .no-thumb {
+      display: flex; flex-direction: column; align-items: center; gap: 0.5rem;
+      color: #2a3040;
+    }
+    .card-thumb .no-thumb svg { width: 36px; height: 36px; }
+    .card-thumb .no-thumb span { font-size: 0.65rem; letter-spacing: 0.05em; text-transform: uppercase; }
+    .card-body {
+      padding: 1rem;
+      display: flex; flex-direction: column; gap: 0.4rem;
+      flex: 1;
+    }
+    .card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.5rem; }
+    .card-title { font-size: 0.9rem; font-weight: 600; color: #f3f4f6; line-height: 1.3; flex: 1; }
+    .badge {
+      font-size: 0.62rem; font-weight: 500;
+      padding: 0.18rem 0.5rem;
+      border-radius: 20px;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .badge-site    { background: rgba(16,185,129,0.15); color: #6ee7b7; border: 1px solid rgba(16,185,129,0.25); }
+    .badge-building{ background: rgba(139,92,246,0.15); color: #c4b5fd; border: 1px solid rgba(139,92,246,0.25); }
+    .badge-infra   { background: rgba(245,158,11,0.15); color: #fcd34d; border: 1px solid rgba(245,158,11,0.25); }
+    .badge-equip   { background: rgba(59,130,246,0.15); color: #93c5fd; border: 1px solid rgba(59,130,246,0.25); }
+    .badge-other   { background: rgba(107,114,128,0.15); color: #9ca3af; border: 1px solid rgba(107,114,128,0.25); }
+    .card-desc { font-size: 0.78rem; color: var(--muted); line-height: 1.5; }
+    .card-meta { font-size: 0.7rem; color: #374151; margin-top: auto; padding-top: 0.5rem; }
+    .card-footer {
+      padding: 0.75rem 1rem;
+      border-top: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .card-size { font-size: 0.68rem; color: var(--muted); }
+    .btn-view {
+      font-size: 0.75rem; font-weight: 500;
+      padding: 0.32rem 0.85rem;
+      background: var(--accent-dim);
+      color: #93c5fd;
+      border: 1px solid rgba(59,130,246,0.3);
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background 0.12s;
+    }
+    .btn-view:hover { background: rgba(59,130,246,0.25); }
+    /* ── Empty state ─────────────────────────────────────────── */
+    .empty {
+      grid-column: 1 / -1;
+      text-align: center;
+      padding: 4rem 2rem;
+      color: var(--muted);
+      font-size: 0.85rem;
+    }
+    /* ── Footer ───────────────────────────────────────────── */
+    footer {
+      padding: 1.2rem 2rem;
+      border-top: 1px solid var(--border);
+      font-size: 0.72rem;
+      color: #374151;
+      text-align: center;
+    }
+  </style>
 </head>
 <body>
-    <header>
-        <h1>ArchVista</h1>
-        <span>Rhino 3D Model Library</span>
-    </header>
+  <header>
+    <div class="logo">
+      <h1>ArchVista</h1>
+      <span>3D Model Library</span>
+    </div>
+    <div class="search-wrap">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+      </svg>
+      <input type="text" id="search" placeholder="Search models..." autocomplete="off">
+    </div>
+  </header>
 
-    <main>
-        <p class="section-label">Models</p>
-        
-        <article class="model-card" tabindex="0" data-model="torpederas-valparaisoCLS.3dm" onclick="openViewer(this.dataset.model)" role="button">
-            <div class="model-info">
-                <h2 class="model-title">Torpederas – Valparaíso Cable Landing Station</h2>
-                <p class="model-desc">Path from the beach to the cable landing station, modeled in Rhino (.3dm).</p>
-                <p class="model-meta">torpederas-valparaisoCLS.3dm</p>
-            </div>
-            <button class="btn-open" aria-hidden="true">Open model</button>
-        </article>
+  <nav class="filters" id="filters">
+    <button class="filter-btn active" data-cat="all">All</button>
+    <button class="filter-btn" data-cat="site">Site Models</button>
+    <button class="filter-btn" data-cat="building">Buildings</button>
+    <button class="filter-btn" data-cat="infra">Infrastructure</button>
+    <button class="filter-btn" data-cat="equip">Equipment</button>
+    <button class="filter-btn" data-cat="other">Other</button>
+  </nav>
 
-    </main>
+  <main>
+    <div class="grid-label" id="grid-label">1 model</div>
+    <div class="grid" id="grid"></div>
+  </main>
 
-    <footer>
-        ArchVista • Orbit by default • Press F to toggle Free-Fly (WASD + mouse)
-    </footer>
+  <footer>ArchVista &mdash; Archivo-1</footer>
 
-    <script>
-        function openViewer(modelName) {
-            const url = new URL('viewer.html', window.location.href);
-            url.searchParams.set('model', modelName);
-            window.location.href = url.toString();
+  <script>
+    // ================================================================
+    // MODEL LIBRARY
+    // To add a model, add an entry to this array.
+    // Fields:
+    //   file:     filename inside /models/ (required)
+    //   title:    display name
+    //   desc:     short description
+    //   cat:      'site' | 'building' | 'infra' | 'equip' | 'other'
+    //   size:     approximate file size string
+    //   thumb:    optional path to a thumbnail image
+    // ================================================================
+    const MODELS = [
+      {
+        file:  'torpederas-valparaisoCLS.3dm',
+        title: 'Torpederas de Valpara\u00edso',
+        desc:  'Site model of the historic Torpederas naval complex in Valpara\u00edso, Chile. Includes terrain, buildings, and waterfront infrastructure.',
+        cat:   'site',
+        size:  '~16 MB',
+        thumb: null
+      }
+      // Add more models here, e.g.:
+      // { file: 'building-a.3dm', title: 'Building A', desc: '...', cat: 'building', size: '~4 MB', thumb: null },
+    ];
+
+    // ================================================================
+    // RENDERING
+    // ================================================================
+    const BADGE_CLASSES = {
+      site:     'badge-site',
+      building: 'badge-building',
+      infra:    'badge-infra',
+      equip:    'badge-equip',
+      other:    'badge-other'
+    };
+    const BADGE_LABELS = {
+      site:     'Site Model',
+      building: 'Building',
+      infra:    'Infrastructure',
+      equip:    'Equipment',
+      other:    'Other'
+    };
+    const THUMB_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
+      <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>
+      <polyline points="9 22 9 12 15 12 15 22"/>
+    </svg>`;
+
+    let activeFilter = 'all';
+    let searchQuery  = '';
+
+    function matchesFilter(m) {
+      const catOk = activeFilter === 'all' || m.cat === activeFilter;
+      if (!catOk) return false;
+      if (!searchQuery) return true;
+      const q = searchQuery.toLowerCase();
+      return (m.title || '').toLowerCase().includes(q) ||
+             (m.desc  || '').toLowerCase().includes(q) ||
+             (m.file  || '').toLowerCase().includes(q);
+    }
+
+    function openModel(file) {
+      window.location.href = 'viewer.html?model=' + encodeURIComponent(file);
+    }
+
+    function renderGrid() {
+      const grid  = document.getElementById('grid');
+      const label = document.getElementById('grid-label');
+      const visible = MODELS.filter(matchesFilter);
+      label.textContent = visible.length + ' model' + (visible.length !== 1 ? 's' : '');
+      grid.innerHTML = '';
+      if (visible.length === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'empty';
+        empty.textContent = 'No models match your search.';
+        grid.appendChild(empty);
+        return;
+      }
+      visible.forEach(function(m) {
+        const card = document.createElement('div');
+        card.className = 'card';
+        card.addEventListener('click', function() { openModel(m.file); });
+        // Thumbnail
+        const thumb = document.createElement('div');
+        thumb.className = 'card-thumb';
+        if (m.thumb) {
+          const img = document.createElement('img');
+          img.src = m.thumb;
+          img.alt = m.title;
+          thumb.appendChild(img);
+        } else {
+          const placeholder = document.createElement('div');
+          placeholder.className = 'no-thumb';
+          placeholder.innerHTML = THUMB_SVG + '<span>3DM</span>';
+          thumb.appendChild(placeholder);
         }
-    </script>
+        // Body
+        const body = document.createElement('div');
+        body.className = 'card-body';
+        const top = document.createElement('div');
+        top.className = 'card-top';
+        const title = document.createElement('div');
+        title.className = 'card-title';
+        title.textContent = m.title || m.file;
+        const badge = document.createElement('span');
+        badge.className = 'badge ' + (BADGE_CLASSES[m.cat] || 'badge-other');
+        badge.textContent = BADGE_LABELS[m.cat] || m.cat;
+        top.appendChild(title);
+        top.appendChild(badge);
+        const desc = document.createElement('div');
+        desc.className = 'card-desc';
+        desc.textContent = m.desc || '';
+        body.appendChild(top);
+        body.appendChild(desc);
+        // Footer
+        const footer = document.createElement('div');
+        footer.className = 'card-footer';
+        const size = document.createElement('span');
+        size.className = 'card-size';
+        size.textContent = m.size || '';
+        const btn = document.createElement('button');
+        btn.className = 'btn-view';
+        btn.textContent = 'View 3D';
+        btn.addEventListener('click', function(e) { e.stopPropagation(); openModel(m.file); });
+        footer.appendChild(size);
+        footer.appendChild(btn);
+        card.appendChild(thumb);
+        card.appendChild(body);
+        card.appendChild(footer);
+        grid.appendChild(card);
+      });
+    }
+
+    // Filter buttons
+    document.getElementById('filters').addEventListener('click', function(e) {
+      const btn = e.target.closest('.filter-btn');
+      if (!btn) return;
+      document.querySelectorAll('.filter-btn').forEach(function(b) { b.classList.remove('active'); });
+      btn.classList.add('active');
+      activeFilter = btn.dataset.cat;
+      renderGrid();
+    });
+
+    // Search
+    document.getElementById('search').addEventListener('input', function(e) {
+      searchQuery = e.target.value.trim();
+      renderGrid();
+    });
+
+    // Initial render
+    renderGrid();
+  </script>
 </body>
 </html>
