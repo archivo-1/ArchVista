@@ -9,12 +9,22 @@
     "thumbnail": ""
   },
   {
-    "id": "new-building",
+    "id": "cable1",
     "name": "Cable Humboldt",
     "file": "cables3d.3dm",
     "description": "Cable Humaboldt comparado a escala humana",
     "category": "building",
     "size": "~10 MB",
     "thumbnail": "thumbnails/new-building.jpg"
+  },
+  {
+    "id": "plano1",
+    "name": "Mapa de cables submarinos",
+    "file": "mapamundi1.3dm",
+    "description": "...",
+    "category": "building",
+    "size": "~10 MB",
+    "thumbnail": "thumbnails/new-building.jpg"
   }
+
 ]
