@@ -56,18 +56,22 @@
     #style-modes { position: fixed; bottom: 56px; left: 50%; transform: translateX(-50%); display: flex; gap: 4px; z-index: 10; }
     .style-btn { padding: 0.28rem 0.65rem; font-size: 0.7rem; font-weight: 500; background: rgba(10,12,20,0.85); color: #9ca3af; border: 1px solid rgba(255,255,255,0.08); border-radius: 5px; cursor: pointer; backdrop-filter: blur(4px); transition: all 0.12s; }
     .style-btn.active { background: rgba(124,58,237,0.25); color: #a78bfa; border-color: rgba(124,58,237,0.5); }
-    
+
     #cam-modes { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); display: flex; gap: 6px; z-index: 10; }
     .cam-btn { padding: 0.38rem 0.75rem; font-size: 0.75rem; font-weight: 500; background: rgba(10,12,20,0.85); color: #9ca3af; border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; cursor: pointer; backdrop-filter: blur(4px); transition: all 0.12s; }
     .cam-btn.active { background: rgba(59,130,246,0.2); color: #60a5fa; border-color: rgba(59,130,246,0.5); }
 
     #lock-hint { position: fixed; bottom: 96px; left: 50%; transform: translateX(-50%); padding: 0.35rem 0.9rem; background: rgba(0,0,0,0.7); border-radius: 20px; font-size: 0.72rem; color: #9ca3af; pointer-events: none; opacity: 0; transition: opacity 0.3s; white-space: nowrap; }
     #lock-hint.visible { opacity: 1; }
+
     #model-title { position: fixed; top: 10px; left: 50%; transform: translateX(-50%); font-size: 0.78rem; font-weight: 500; color: #6b7280; pointer-events: none; z-index: 10; letter-spacing: 0.03em; white-space: nowrap; }
   </style>
 </head>
 <body>
-  <div id="loading"><div class="spinner"></div><p>Loading model...</p></div>
+  <div id="loading">
+    <div class="spinner"></div>
+    <p>Loading model...</p>
+  </div>
 
   <div id="model-title">ArchVista Viewer</div>
 
@@ -93,13 +97,13 @@
     <div class="mode-indicator">Mode: <span id="mode-label">Orbit</span></div>
   </div>
 
-  <!-- Panels -->
+  <!-- Side Panels -->
   <div id="panel-layers" class="side-panel">
     <div class="panel-header"><h2>Layers</h2></div>
-    <div id="layer-list" class="panel-content"></div>
+    <div class="panel-content" id="layer-list"></div>
   </div>
 
-  <div id="panel-sun" class="side-panel">
+  <div id="panel-settings" class="side-panel">
     <div class="panel-header"><h2>Lighting</h2></div>
     <div class="panel-content">
       <div class="panel-field">
@@ -120,10 +124,11 @@
   <div class="tr-tools">
     <button class="tr-btn" onclick="window.location.href='index.html'">← Gallery</button>
     <button id="btn-layers" class="tr-btn" onclick="togglePanel('layers')">Layers</button>
-    <button id="btn-sun" class="tr-btn" onclick="togglePanel('sun')">Lighting</button>
+    <button id="btn-settings" class="tr-btn" onclick="togglePanel('settings')">Lighting</button>
     <button class="tr-btn" onclick="resetCamera()">↺ Reset View</button>
   </div>
 
+  <!-- Bottom Bar -->
   <div id="style-modes">
     <button class="style-btn active" data-style="rendered" onclick="applyStyle('rendered')">Rendered</button>
     <button class="style-btn" data-style="clay" onclick="applyStyle('clay')">Clay</button>
@@ -143,13 +148,20 @@
   <script src="https://cdn.jsdelivr.net/npm/three@0.137.5/build/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.137.5/examples/js/controls/OrbitControls.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/rhino3dm@8.4.0/rhino3dm.min.js"></script>
-  <script src="viewer-3dm.js"></script>
+  <script src="https://raw.githubusercontent.com/archivo-1/ArchVista/main/viewer-3dm.js"></script>
   <script>
     document.addEventListener('modchange', function(e) {
       ['orbit','walk','fly','ortho'].forEach(m => {
-        document.getElementById(m+'-controls').style.display = (e.detail===m)?'':'none';
+        const el = document.getElementById(m+'-controls');
+        if (el) el.style.display = (e.detail===m)?'':'none';
       });
       document.getElementById('lock-hint').classList.toggle('visible', e.detail==='walk'||e.detail==='fly');
+      
+      const modeLabel = document.getElementById('mode-label');
+      if (modeLabel) {
+        const labels = { orbit: 'Orbit', walk: 'Walk', fly: 'Fly', ortho: 'Top View' };
+        modeLabel.textContent = labels[e.detail] || e.detail;
+      }
     });
 
     (function(){
@@ -165,13 +177,13 @@
       const target = document.getElementById('panel-' + id);
       const btn = document.getElementById('btn-' + id);
       const isOpen = target.classList.contains('open');
-
+      
       document.querySelectorAll('.side-panel').forEach(p => p.classList.remove('open'));
       document.querySelectorAll('.tr-btn').forEach(b => b.classList.remove('panel-open'));
 
       if (!isOpen) {
         target.classList.add('open');
-        btn.classList.add('panel-open');
+        if (btn) btn.classList.add('panel-open');
         openPanelId = id;
       } else {
         openPanelId = null;
