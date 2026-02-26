@@ -14,10 +14,10 @@
   const downVec = new THREE.Vector3(0, -1, 0);
   const keys = {};
   const velocity = new THREE.Vector3();
-  const damping = 0.82;
+  const damping = 0.85;
   let yaw = 0, pitch = 0;
-  const WALK_HEIGHT = 1.7;
-  const COLLISION_DISTANCE = 0.5;
+  const WALK_HEIGHT = 1.8;
+  const COLLISION_DISTANCE = 0.7;
 
   // ── Visual style ────────────────────────────────────────────────────────
   let visualStyle = 'rendered';
@@ -133,8 +133,8 @@
 
   function getGroundY(x, z) {
     if (groundMeshes.length === 0) return modelCenter.y;
-    // Cast from high above the model to find the highest ground point
-    const origin = new THREE.Vector3(x, modelCenter.y + modelSpan * 2.5, z);
+    // Cast from high above the model down to the highest surface
+    const origin = new THREE.Vector3(x, modelCenter.y + modelSpan * 3, z);
     raycaster.set(origin, downVec);
     const hits = raycaster.intersectObjects(groundMeshes, false);
     return hits.length > 0 ? hits[0].point.y : modelCenter.y;
@@ -142,6 +142,7 @@
 
   function checkCollision(pos, dir, dist) {
     if (!modelGroup) return false;
+    // Check for collisions with any renderable mesh
     raycaster.set(pos, dir);
     const hits = raycaster.intersectObjects(modelGroup.children, true);
     for (let hit of hits) {
@@ -345,9 +346,10 @@
         box.getSize(modelSize);
         modelSpan = Math.max(modelSize.x, modelSize.y, modelSize.z) || 10;
         
-        // Adjust camera planes to prevent flickering (Z-fighting)
-        const near = Math.max(0.1, modelSpan * 0.0002);
-        const far = modelSpan * 20;
+        // ── Fix Flickering ──
+        // Increase near plane significantly and use a tighter far plane
+        const near = Math.max(2.0, modelSpan * 0.001);
+        const far = modelSpan * 25;
         [orbitCamera, walkCamera, flyCamera].forEach(c => {
           c.near = near; c.far = far; c.updateProjectionMatrix();
         });
@@ -364,7 +366,7 @@
   function init() {
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0x050608);
-    // Use logarithmicDepthBuffer to solve flickering
+    // Use logarithmicDepthBuffer for better depth precision on large models
     renderer = new THREE.WebGLRenderer({ antialias: true, logarithmicDepthBuffer: true });
     renderer.setPixelRatio(window.devicePixelRatio);
     renderer.setSize(window.innerWidth, window.innerHeight);
@@ -372,15 +374,16 @@
     document.body.appendChild(renderer.domElement);
 
     const aspect = window.innerWidth / window.innerHeight;
-    orbitCamera = new THREE.PerspectiveCamera(50, aspect, 0.5, 50000);
+    // Initial camera planes are overwritten by loadModel based on model size
+    orbitCamera = new THREE.PerspectiveCamera(50, aspect, 1, 10000);
     orbitControls = new THREE.OrbitControls(orbitCamera, renderer.domElement);
     orbitControls.enableDamping = true;
     
-    walkCamera = new THREE.PerspectiveCamera(75, aspect, 0.2, 50000);
+    walkCamera = new THREE.PerspectiveCamera(75, aspect, 1, 10000);
     walkCamera.rotation.order = 'YXZ';
-    flyCamera = new THREE.PerspectiveCamera(75, aspect, 0.2, 50000);
+    flyCamera = new THREE.PerspectiveCamera(75, aspect, 1, 10000);
     flyCamera.rotation.order = 'YXZ';
-    orthoCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.5, 50000);
+    orthoCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 1, 10000);
     activeCamera = orbitCamera;
 
     scene.add(new THREE.HemisphereLight(0xd6e4f0, 0x3a3020, 0.6));
@@ -408,8 +411,8 @@
 
     window.addEventListener('mousemove', e => {
       if ((cameraMode !== 'walk' && cameraMode !== 'fly') || document.pointerLockElement !== renderer.domElement) return;
-      yaw -= e.movementX * 0.002; pitch -= e.movementY * 0.002;
-      pitch = Math.max(-1.55, Math.min(1.55, pitch));
+      yaw -= e.movementX * 0.0022; pitch -= e.movementY * 0.0022;
+      pitch = Math.max(-1.5, Math.min(1.5, pitch));
       (cameraMode === 'walk' ? walkCamera : flyCamera).rotation.set(pitch, yaw, 0, 'YXZ');
     });
 
@@ -419,7 +422,7 @@
 
     (function anim() {
       requestAnimationFrame(anim);
-      const spd = modelSpan * 0.0028;
+      const spd = modelSpan * 0.003;
       if (cameraMode === 'walk' || cameraMode === 'fly') {
         const cam = cameraMode === 'walk' ? walkCamera : flyCamera;
         const f = new THREE.Vector3(), r = new THREE.Vector3();
@@ -438,10 +441,12 @@
           if (keys['ShiftLeft']) move.y -= spd;
         }
 
-        // Collision detection for walls/objects
+        // ── Robust Collision Check ──
         if (move.lengthSq() > 0) {
           const dir = move.clone().normalize();
-          if (!checkCollision(cam.position, dir, COLLISION_DISTANCE * 1.5)) {
+          // Check center, left and right of camera to avoid clipping
+          const collision = checkCollision(cam.position, dir, COLLISION_DISTANCE * 2);
+          if (!collision) {
             velocity.add(move);
           }
         }
@@ -451,9 +456,9 @@
         
         if (cameraMode === 'walk') {
           const gy = getGroundY(cam.position.x, cam.position.z);
-          // Smooth vertical transition to prevent "clipping" through terrain
           const targetY = gy + WALK_HEIGHT;
-          cam.position.y += (targetY - cam.position.y) * 0.2;
+          // Soft damping on Y movement for smoother steps
+          cam.position.y += (targetY - cam.position.y) * 0.15;
         }
       } else if (cameraMode === 'orbit') orbitControls.update();
       renderer.render(scene, activeCamera);
