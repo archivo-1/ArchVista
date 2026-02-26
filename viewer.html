@@ -82,43 +82,64 @@
 
         /* ── Mobile responsive (≤ 600px) ──────────────────────────────── */
         @media (max-width: 600px) {
-            /* Hide keyboard-shortcut hints on mobile */
+            /* Hide desktop-only hints */
             #overlay { display: none; }
-            #model-title { font-size: 0.68rem; top: 6px; }
+            #model-title { display: none; }
 
-            /* Layers panel: full-width strip at top */
-            #layers-panel { top: 6px; right: 6px; left: 6px; width: auto; max-width: none; right: 6px; }
+            /* Back / Reset — top-right, compact */
+            #back-btn  { top: 8px; right: 8px; padding: 0.3rem 0.55rem; font-size: 0.68rem; }
+            #reset-btn { top: 40px; right: 8px; padding: 0.3rem 0.55rem; font-size: 0.68rem; }
 
-            /* Back / Reset closer to edges */
-            #back-btn { top: 6px; right: 6px; padding: 0.35rem 0.65rem; font-size: 0.7rem; }
-            #reset-btn { top: 38px; right: 6px; padding: 0.35rem 0.65rem; font-size: 0.7rem; }
+            /* Layers panel — top-left, compact fixed width */
+            #layers-panel {
+                top: 8px;
+                left: 8px;
+                right: auto;
+                width: 160px;
+            }
+            #layers-body { max-height: 35vh; }
 
-            /* Side controls: stack at bottom, full width strip */
-            #side-controls { bottom: 96px; right: 6px; left: 6px; flex-direction: row; flex-wrap: wrap; gap: 5px; }
-            .panel { min-width: 0; flex: 1; padding: 0.45rem 0.6rem; }
-            #env-controls input[type="range"] { height: 4px; }
+            /* Hide heavy env controls on mobile */
+            #side-controls { display: none; }
 
-            /* Style buttons: smaller */
-            #style-modes { bottom: 52px; gap: 3px; }
-            .style-btn { padding: 0.22rem 0.45rem; font-size: 0.65rem; }
+            /* Style buttons — compact strip above camera buttons */
+            #style-modes {
+                bottom: 50px;
+                gap: 3px;
+            }
+            .style-btn {
+                padding: 0.22rem 0.42rem;
+                font-size: 0.63rem;
+            }
 
-            /* Camera buttons: wrap across full width */
-            #cam-modes { bottom: 8px; left: 0; right: 0; transform: none; width: 100%; padding: 0 6px; gap: 4px; }
-            .cam-btn { padding: 0.32rem 0.5rem; font-size: 0.68rem; flex: 1; text-align: center; }
+            /* Camera buttons — full-width bar at bottom */
+            #cam-modes {
+                bottom: 6px;
+                left: 0; right: 0;
+                transform: none;
+                width: 100%;
+                padding: 0 6px;
+                gap: 4px;
+            }
+            .cam-btn {
+                padding: 0.3rem 0.4rem;
+                font-size: 0.65rem;
+                flex: 1;
+                text-align: center;
+            }
 
-            /* Lock hint higher up */
-            #lock-hint { bottom: 106px; }
+            #lock-hint { bottom: 100px; }
         }
 
-        /* ── Tablet (601–900px) ───────────────────────────────────────── */
+        /* ── Tablet (601–900px) ──────────────────────────────────── */
         @media (min-width: 601px) and (max-width: 900px) {
             #overlay { max-width: 170px; font-size: 0.7rem; }
             #layers-panel { right: 100px; width: 165px; }
-            #back-btn { top: 10px; }
+            #back-btn  { top: 10px; }
             #reset-btn { top: 44px; }
-            .cam-btn { padding: 0.32rem 0.55rem; font-size: 0.7rem; }
-            .style-btn { padding: 0.24rem 0.5rem; font-size: 0.67rem; }
-        }
+            .cam-btn   { padding: 0.32rem 0.55rem; font-size: 0.7rem; }
+            .style-btn { padding: 0.24rem 0.5rem;  font-size: 0.67rem; }
+        }        }
     </style>
 </head>
 <body>
@@ -163,7 +184,7 @@
     <div id="model-title"></div>
 
     <!-- Layers panel (collapsible) -->
-    <div id="layers-panel">
+    <div id="layers-panel" class="collapsed">
         <div id="layers-header" onclick="(function(){
             var p=document.getElementById('layers-panel');
             p.classList.toggle('collapsed');
