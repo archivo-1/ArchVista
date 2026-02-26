@@ -1,9 +1,8 @@
 (function() {
     'use strict';
-
     // ── Core scene objects ──────────────────────────────────────────────────
     let scene, renderer, orbitCamera, walkCamera, flyCamera, orthoCamera, activeCamera, orbitControls;
-    let sun, hemi, fill;
+    let sun, hemi, fill, sky, skyUniforms;
     let cameraMode = 'orbit'; 
     let isOrthoOrbit = false;
     let is2DModel = false;
@@ -43,7 +42,6 @@
         const p = new URLSearchParams(window.location.search);
         return p.get('model') || 'torpederas-valparaisoCLS.3dm';
     }
-
     function showLoading(msg) {
         const el = document.getElementById('loading');
         if (!el) return;
@@ -51,22 +49,36 @@
         const p = el.querySelector('p');
         if (p && msg) p.textContent = msg;
     }
-
     function hideLoading() {
         const el = document.getElementById('loading');
         if (el) el.classList.add('hidden');
     }
 
     // ── Environment & Background ─────────────────────────────────────────────
+    function initSky() {
+        if (sky) return;
+        sky = new THREE.Sky();
+        sky.scale.setScalar(450000);
+        scene.add(sky);
+        skyUniforms = sky.material.uniforms;
+        skyUniforms['turbidity'].value = 10;
+        skyUniforms['rayleigh'].value = 3;
+        skyUniforms['mieCoefficient'].value = 0.005;
+        skyUniforms['mieDirectionalG'].value = 0.7;
+    }
+
     function updateSun() {
         if (!sun) return;
         const az = parseFloat(document.getElementById('sun-az').value);
         const el = parseFloat(document.getElementById('sun-el').value);
-        document.getElementById('az-val').textContent = az + '°';
-        document.getElementById('el-val').textContent = el + '°';
+        const azEl = document.getElementById('az-val'), elEl = document.getElementById('el-val');
+        if (azEl) azEl.textContent = az + '°';
+        if (elEl) elEl.textContent = el + '°';
+
         const phi = (90 - el) * (Math.PI / 180);
         const theta = (az + 180) * (Math.PI / 180);
         const dist = modelSpan * 2.5;
+
         sun.position.set(
             modelCenter.x + dist * Math.sin(phi) * Math.cos(theta),
             modelCenter.y + dist * Math.cos(phi),
@@ -74,6 +86,11 @@
         );
         sun.target.position.copy(modelCenter);
         sun.target.updateMatrixWorld();
+
+        if (skyUniforms) {
+            skyUniforms['sunPosition'].value.copy(sun.position);
+        }
+
         const d = modelSpan * 1.5;
         sun.shadow.camera.left = -d; sun.shadow.camera.right = d;
         sun.shadow.camera.top = d; sun.shadow.camera.bottom = -d;
@@ -82,21 +99,31 @@
 
     function changeBackground(type) {
         if (!scene) return;
+        if (sky) { scene.remove(sky); sky = null; skyUniforms = null; }
+        
         if (type === 'black') scene.background = new THREE.Color(0x050608);
         else if (type === 'white') scene.background = new THREE.Color(0xffffff);
         else if (type === 'grey') scene.background = new THREE.Color(0x22262e);
-        else if (type === 'sky' || type === 'gradient') {
+        else if (type === 'sky' || type === 'sunset') {
+            initSky();
+            if (type === 'sunset') {
+                document.getElementById('sun-el').value = 2;
+                document.getElementById('sun-az').value = 180;
+                skyUniforms['turbidity'].value = 20;
+                skyUniforms['rayleigh'].value = 2;
+            } else {
+                skyUniforms['turbidity'].value = 10;
+                skyUniforms['rayleigh'].value = 3;
+            }
+            updateSun();
+            scene.background = null;
+        } else if (type === 'gradient') {
             const canvas = document.createElement('canvas');
             canvas.width = 2; canvas.height = 512;
             const ctx = canvas.getContext('2d');
             const grad = ctx.createLinearGradient(0, 0, 0, 512);
-            if (type === 'sky') {
-                grad.addColorStop(0, '#0f172a');
-                grad.addColorStop(1, '#3b82f6');
-            } else {
-                grad.addColorStop(0, '#020617');
-                grad.addColorStop(1, '#1e293b');
-            }
+            grad.addColorStop(0, '#020617');
+            grad.addColorStop(1, '#1e293b');
             ctx.fillStyle = grad; ctx.fillRect(0, 0, 2, 512);
             scene.background = new THREE.CanvasTexture(canvas);
         }
@@ -128,7 +155,7 @@
         const prev = cameraMode;
         cameraMode = mode;
         if ((prev === 'walk' || prev === 'fly') && document.pointerLockElement) document.exitPointerLock();
-        
+
         if (mode === 'orbit') {
             activeCamera = isOrthoOrbit ? orthoCamera : orbitCamera;
             orbitControls.object = activeCamera;
@@ -248,11 +275,14 @@
         if (!list) return;
         list.innerHTML = '';
         const names = Object.keys(layerMeshes).sort();
-        if (names.length === 0) { list.innerHTML = '<div style="font-size:0.65rem;color:#666">No layers found</div>'; return; }
+        if (names.length === 0) {
+            list.innerHTML = '<div style=\"font-size:0.65rem;color:#6b7280;padding:0.2rem\">No layers found</div>';
+            return;
+        }
         names.forEach(name => {
             const row = document.createElement('label'); row.className = 'layer-row';
             const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = true;
-            cb.onchange = () => { layerMeshes[name].forEach(m => m.visible = cb.checked); };
+            cb.onchange = () => { if (layerMeshes[name]) layerMeshes[name].forEach(m => m.visible = cb.checked); };
             row.appendChild(cb); row.appendChild(document.createTextNode(name));
             list.appendChild(row);
         });
@@ -267,7 +297,7 @@
             if (layerIdx >= 0 && layers.count > 0) {
                 const layer = layers.get(layerIdx);
                 if (layer) {
-                    layerName = layer.name;
+                    layerName = layer.name || 'Default';
                     hexColor = (attrs.colorSource === 1 || attrs.colorSource === 'object') ? 
                         rhinoColorToHex(attrs.objectColor || attrs.drawColor) : rhinoColorToHex(layer.color);
                 }
@@ -322,7 +352,6 @@
         const group = new THREE.Group();
         const objs = doc.objects();
         layerMeshes = {}; // Reset
-
         function recurse(obj, parent) {
             const geom = obj.geometry(); if (!geom) return;
             if (rhino.ObjectType && geom.objectType === rhino.ObjectType.InstanceReference) {
@@ -339,8 +368,9 @@
                 tojs.forEach(o => {
                     if (o.isMesh) o.castShadow = o.receiveShadow = shadowEnabled;
                     parent.add(o);
-                    if (!layerMeshes[app.layerName]) layerMeshes[app.layerName] = [];
-                    layerMeshes[app.layerName].push(o);
+                    const ln = app.layerName || 'Default';
+                    if (!layerMeshes[ln]) layerMeshes[ln] = [];
+                    layerMeshes[ln].push(o);
                 });
             }
         }
@@ -358,7 +388,7 @@
                 const doc = rhino.File3dm.fromByteArray(new Uint8Array(await res.arrayBuffer()));
                 const group = processDocObjects(doc, rhino, document.getElementById('toggle-shadows').checked);
                 doc.delete();
-                if (group.children.length === 0) throw new Error('No geometry');
+                if (group.children.length === 0) throw new Error('No geometry found');
                 group.rotation.x = -Math.PI / 2;
                 scene.add(group); modelGroup = group;
                 const box = new THREE.Box3().setFromObject(group);
@@ -375,12 +405,13 @@
     }
 
     function init() {
-        scene = new THREE.Scene(); scene.background = new THREE.Color(0x050608);
+        scene = new THREE.Scene();
         renderer = new THREE.WebGLRenderer({ antialias: true, logarithmicDepthBuffer: true });
         renderer.setPixelRatio(window.devicePixelRatio); renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
         renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 0.95;
         document.body.appendChild(renderer.domElement);
+
         const aspect = window.innerWidth / window.innerHeight;
         orbitCamera = new THREE.PerspectiveCamera(50, aspect, 0.1, 1000000);
         orbitControls = new THREE.OrbitControls(orbitCamera, renderer.domElement);
@@ -389,6 +420,7 @@
         flyCamera = new THREE.PerspectiveCamera(75, aspect, 0.1, 1000000); flyCamera.rotation.order = 'YXZ';
         orthoCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 1000000);
         activeCamera = orbitCamera;
+
         scene.add(new THREE.HemisphereLight(0xd6e4f0, 0x3a3020, 0.65));
         sun = new THREE.DirectionalLight(0xfff5e0, 1.2); sun.castShadow = true;
         sun.shadow.mapSize.width = sun.shadow.mapSize.height = 2048;
@@ -402,6 +434,7 @@
             orbitCamera.updateProjectionMatrix(); walkCamera.updateProjectionMatrix(); flyCamera.updateProjectionMatrix();
             syncOrthoCamera();
         });
+
         window.addEventListener('keydown', e => {
             keys[e.code] = true;
             if (e.code === 'Digit1') setCameraMode('orbit');
@@ -411,12 +444,14 @@
             if (e.code === 'KeyR') resetCamera();
         });
         window.addEventListener('keyup', e => keys[e.code] = false);
+
         window.addEventListener('mousemove', e => {
             if ((cameraMode !== 'walk' && cameraMode !== 'fly') || document.pointerLockElement !== renderer.domElement) return;
             yaw -= e.movementX * 0.002; pitch -= e.movementY * 0.002;
             pitch = Math.max(-Math.PI/2+0.1, Math.min(Math.PI/2-0.1, pitch));
             if (cameraMode === 'walk') walkCamera.rotation.set(pitch, yaw, 0, 'YXZ'); else flyCamera.rotation.set(pitch, yaw, 0, 'YXZ');
         });
+
         renderer.domElement.addEventListener('click', () => { if (cameraMode==='walk'||cameraMode==='fly') renderer.domElement.requestPointerLock(); });
         document.getElementById('sun-az').addEventListener('input', updateSun);
         document.getElementById('sun-el').addEventListener('input', updateSun);
@@ -425,8 +460,10 @@
         document.getElementById('ortho-toggle').addEventListener('click', toggleOrtho);
         document.querySelectorAll('.cam-btn[data-mode]').forEach(btn => btn.addEventListener('click', () => setCameraMode(btn.dataset.mode)));
         document.querySelectorAll('.style-btn').forEach(btn => btn.addEventListener('click', () => applyStyle(btn.dataset.style)));
-        
+
+        changeBackground('black');
         loadModel();
+
         (function anim() {
             requestAnimationFrame(anim);
             const spd = modelSpan * 0.004, rad = 0.5;
