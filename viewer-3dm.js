@@ -14,15 +14,15 @@
   const downVec = new THREE.Vector3(0, -1, 0);
   const keys = {};
   const velocity = new THREE.Vector3();
-  const damping = 0.85;
+  const damping = 0.82;
   let yaw = 0, pitch = 0;
   const WALK_HEIGHT = 1.7;
+  const COLLISION_DISTANCE = 0.5;
 
   // ── Visual style ────────────────────────────────────────────────────────
   let visualStyle = 'rendered';
   const meshMatCache = {};
 
-  // Special layer-name keywords -> material overrides
   const LAYER_OVERRIDES = {
     glass:     { color: 0xadd8f7, roughness: 0.05, metalness: 0.1,  transparent: true, opacity: 0.35 },
     window:    { color: 0xadd8f7, roughness: 0.05, metalness: 0.1,  transparent: true, opacity: 0.35 },
@@ -101,7 +101,7 @@
       orbitControls.enabled = false;
       const target = orbitControls.target.clone();
       const groundY = getGroundY(target.x, target.z);
-      walkCamera.position.set(target.x, groundY + WALK_HEIGHT, target.z + modelSpan * 0.1);
+      walkCamera.position.set(target.x, groundY + WALK_HEIGHT, target.z + modelSpan * 0.05);
       walkCamera.rotation.set(0, 0, 0, 'YXZ');
       yaw = 0; pitch = 0;
     } else if (mode === 'fly') {
@@ -133,10 +133,21 @@
 
   function getGroundY(x, z) {
     if (groundMeshes.length === 0) return modelCenter.y;
-    const origin = new THREE.Vector3(x, modelCenter.y + modelSpan * 2, z);
+    // Cast from high above the model to find the highest ground point
+    const origin = new THREE.Vector3(x, modelCenter.y + modelSpan * 2.5, z);
     raycaster.set(origin, downVec);
     const hits = raycaster.intersectObjects(groundMeshes, false);
     return hits.length > 0 ? hits[0].point.y : modelCenter.y;
+  }
+
+  function checkCollision(pos, dir, dist) {
+    if (!modelGroup) return false;
+    raycaster.set(pos, dir);
+    const hits = raycaster.intersectObjects(modelGroup.children, true);
+    for (let hit of hits) {
+      if (hit.distance < dist) return true;
+    }
+    return false;
   }
 
   function resetCamera() {
@@ -166,12 +177,12 @@
       
       const toggle = document.createElement('div');
       toggle.className = 'layer-toggle';
-      toggle.onclick = () => {
-        const visible = !toggle.classList.contains('off');
-        toggle.classList.toggle('off');
+      toggle.onclick = (e) => {
+        e.stopPropagation();
+        const isOff = toggle.classList.toggle('off');
         modelGroup.traverse(obj => {
           if (obj.userData && obj.userData.layerIndex === i) {
-            obj.visible = !visible;
+            obj.visible = !isOff;
           }
         });
       };
@@ -222,7 +233,6 @@
   }
   window.applyStyle = applyStyle;
 
-  // ── Rhino color utilities ────────────────────────────────────────────────
   function rhinoColorToHex(rc) {
     if (!rc) return 0xcccccc;
     if (typeof rc === 'number') return rc;
@@ -233,39 +243,26 @@
   }
 
   function getObjAppearance(obj, layerTable) {
-    let hexColor = 0xcccccc;
-    let layerName = '';
-    let layerIndex = -1;
+    let hexColor = 0xcccccc, layerName = '', layerIndex = -1;
     try {
       const attrs = obj.attributes();
       if (!attrs) return { hexColor, layerName, layerIndex };
       layerIndex = attrs.layerIndex;
-      const colorSrc = attrs.colorSource;
-      if (colorSrc === 1 || colorSrc === 'object') {
+      if (attrs.colorSource === 1 || attrs.colorSource === 'object') {
         hexColor = rhinoColorToHex(attrs.objectColor || attrs.drawColor);
-      } else {
-        if (layerTable && layerIndex >= 0) {
-          try {
-            const layer = layerTable.get(layerIndex);
-            if (layer) {
-              layerName = layer.name || '';
-              hexColor = rhinoColorToHex(layer.color);
-            }
-          } catch(e) {}
-        }
+      } else if (layerTable && layerIndex >= 0) {
+        try {
+          const layer = layerTable.get(layerIndex);
+          if (layer) { layerName = layer.name || ''; hexColor = rhinoColorToHex(layer.color); }
+        } catch(e) {}
       }
     } catch(e) {}
     return { hexColor, layerName, layerIndex };
   }
 
-  // ── Geometry conversion ──────────────────────────────────────────────────
   function rhinoGeomToThreeObjs(geom, rhino, appearance) {
     const results = [];
-    const hex = appearance ? appearance.hexColor : 0xcccccc;
-    const lname = appearance ? appearance.layerName : '';
-    const lidx = appearance ? appearance.layerIndex : -1;
-
-    // Helper to tag objects
+    const hex = appearance.hexColor, lname = appearance.layerName, lidx = appearance.layerIndex;
     const tag = (o) => { o.userData = { layerIndex: lidx }; return o; };
 
     if (typeof geom.toThreejsJSON === 'function') {
@@ -274,12 +271,10 @@
         const parsed = (typeof json === 'string') ? JSON.parse(json) : json;
         if (parsed && parsed.data && parsed.data.attributes) {
           const geo = new THREE.BufferGeometryLoader().parse(parsed);
-          if (geo) {
-            const matSet = buildMatSet(hex, lname);
-            const mesh = tag(new THREE.Mesh(geo, matSet[visualStyle] || matSet.rendered));
-            meshMatCache[mesh.uuid] = matSet;
-            results.push(mesh); return results;
-          }
+          const matSet = buildMatSet(hex, lname);
+          const mesh = tag(new THREE.Mesh(geo, matSet[visualStyle] || matSet.rendered));
+          meshMatCache[mesh.uuid] = matSet;
+          results.push(mesh); return results;
         }
       } catch(e) {}
     }
@@ -308,14 +303,11 @@
           pts.push(new THREE.Vector3(p[0], p[1], p[2]));
         }
         results.push(tag(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), makeLineMat(hex))));
-        return results;
       } catch(e) {}
     }
-
     return results;
   }
 
-  // ── Model loading ────────────────────────────────────────────────────────
   function loadModel() {
     const name = getModelFromQuery();
     showLoading('Downloading ' + name + '...');
@@ -329,13 +321,12 @@
         const group = new THREE.Group();
         group.rotation.x = -Math.PI / 2;
         
-        const layers = doc.layers();
-        const objs = doc.objects();
+        const layers = doc.layers(), objs = doc.objects();
         for (let i = 0; i < objs.count; i++) {
           try {
             const o = objs.get(i);
-            const appearance = getObjAppearance(o, layers);
-            rhinoGeomToThreeObjs(o.geometry(), rhino, appearance).forEach(three => group.add(three));
+            const app = getObjAppearance(o, layers);
+            rhinoGeomToThreeObjs(o.geometry(), rhino, app).forEach(three => group.add(three));
           } catch(e) {}
         }
         
@@ -354,6 +345,14 @@
         box.getSize(modelSize);
         modelSpan = Math.max(modelSize.x, modelSize.y, modelSize.z) || 10;
         
+        // Adjust camera planes to prevent flickering (Z-fighting)
+        const near = Math.max(0.1, modelSpan * 0.0002);
+        const far = modelSpan * 20;
+        [orbitCamera, walkCamera, flyCamera].forEach(c => {
+          c.near = near; c.far = far; c.updateProjectionMatrix();
+        });
+        orthoCamera.near = near; orthoCamera.far = far;
+
         resetCamera();
         updateSun();
         setCameraMode(groundMeshes.length === 0 ? 'ortho' : 'orbit');
@@ -362,26 +361,26 @@
     });
   }
 
-  // ── Init ─────────────────────────────────────────────────────────────────
   function init() {
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0x050608);
-    renderer = new THREE.WebGLRenderer({ antialias: true });
+    // Use logarithmicDepthBuffer to solve flickering
+    renderer = new THREE.WebGLRenderer({ antialias: true, logarithmicDepthBuffer: true });
     renderer.setPixelRatio(window.devicePixelRatio);
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     document.body.appendChild(renderer.domElement);
 
     const aspect = window.innerWidth / window.innerHeight;
-    orbitCamera = new THREE.PerspectiveCamera(50, aspect, 0.1, 1000000);
+    orbitCamera = new THREE.PerspectiveCamera(50, aspect, 0.5, 50000);
     orbitControls = new THREE.OrbitControls(orbitCamera, renderer.domElement);
     orbitControls.enableDamping = true;
     
-    walkCamera = new THREE.PerspectiveCamera(75, aspect, 0.1, 1000000);
+    walkCamera = new THREE.PerspectiveCamera(75, aspect, 0.2, 50000);
     walkCamera.rotation.order = 'YXZ';
-    flyCamera = new THREE.PerspectiveCamera(75, aspect, 0.1, 1000000);
+    flyCamera = new THREE.PerspectiveCamera(75, aspect, 0.2, 50000);
     flyCamera.rotation.order = 'YXZ';
-    orthoCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 1000000);
+    orthoCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.5, 50000);
     activeCamera = orbitCamera;
 
     scene.add(new THREE.HemisphereLight(0xd6e4f0, 0x3a3020, 0.6));
@@ -410,7 +409,7 @@
     window.addEventListener('mousemove', e => {
       if ((cameraMode !== 'walk' && cameraMode !== 'fly') || document.pointerLockElement !== renderer.domElement) return;
       yaw -= e.movementX * 0.002; pitch -= e.movementY * 0.002;
-      pitch = Math.max(-1.56, Math.min(1.56, pitch));
+      pitch = Math.max(-1.55, Math.min(1.55, pitch));
       (cameraMode === 'walk' ? walkCamera : flyCamera).rotation.set(pitch, yaw, 0, 'YXZ');
     });
 
@@ -420,23 +419,42 @@
 
     (function anim() {
       requestAnimationFrame(anim);
-      const spd = modelSpan * 0.003;
+      const spd = modelSpan * 0.0028;
       if (cameraMode === 'walk' || cameraMode === 'fly') {
         const cam = cameraMode === 'walk' ? walkCamera : flyCamera;
         const f = new THREE.Vector3(), r = new THREE.Vector3();
-        cam.getWorldDirection(f); if (cameraMode === 'walk') f.y = 0; f.normalize();
+        cam.getWorldDirection(f); 
+        if (cameraMode === 'walk') f.y = 0; 
+        f.normalize();
         r.crossVectors(f, cam.up).normalize();
-        if (keys['KeyW']) velocity.addScaledVector(f, spd);
-        if (keys['KeyS']) velocity.addScaledVector(f, -spd);
-        if (keys['KeyA']) velocity.addScaledVector(r, -spd);
-        if (keys['KeyD']) velocity.addScaledVector(r, spd);
+        
+        const move = new THREE.Vector3();
+        if (keys['KeyW']) move.addScaledVector(f, spd);
+        if (keys['KeyS']) move.addScaledVector(f, -spd);
+        if (keys['KeyA']) move.addScaledVector(r, -spd);
+        if (keys['KeyD']) move.addScaledVector(r, spd);
         if (cameraMode === 'fly') {
-          if (keys['Space']) velocity.y += spd;
-          if (keys['ShiftLeft']) velocity.y -= spd;
+          if (keys['Space']) move.y += spd;
+          if (keys['ShiftLeft']) move.y -= spd;
         }
+
+        // Collision detection for walls/objects
+        if (move.lengthSq() > 0) {
+          const dir = move.clone().normalize();
+          if (!checkCollision(cam.position, dir, COLLISION_DISTANCE * 1.5)) {
+            velocity.add(move);
+          }
+        }
+        
         velocity.multiplyScalar(damping);
         cam.position.add(velocity);
-        if (cameraMode === 'walk') cam.position.y = getGroundY(cam.position.x, cam.position.z) + WALK_HEIGHT;
+        
+        if (cameraMode === 'walk') {
+          const gy = getGroundY(cam.position.x, cam.position.z);
+          // Smooth vertical transition to prevent "clipping" through terrain
+          const targetY = gy + WALK_HEIGHT;
+          cam.position.y += (targetY - cam.position.y) * 0.2;
+        }
       } else if (cameraMode === 'orbit') orbitControls.update();
       renderer.render(scene, activeCamera);
     })();
