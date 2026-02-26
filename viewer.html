@@ -101,37 +101,43 @@
 
             /* Hide heavy env controls on mobile */
             /* Env controls: show as ⚙ button at bottom-right */
+            /* Env controls: show as ⚙ button at bottom-right */
             #side-controls {
                 bottom: 88px;
                 right: 8px;
-                width: auto;
-                max-width: 40px;
+                width: 48px;
+                height: 48px;
+                flex-direction: column;
+                gap: 0;
                 overflow: hidden;
-                transition: max-width 0.3s, max-height 0.3s;
+                transition: width 0.3s, height 0.3s;
             }
-            /* Collapsed state: just show first .panel as icon button */
-            #side-controls .panel:first-child::before {
+            /* Override desktop min-width on .panel */
+            #side-controls .panel { min-width: 0; padding: 0; }
+            /* Collapsed state: hide all content, show only icon */
+            #side-controls::before {
                 content: '⚙';
-                display: block;
-                font-size: 1.2rem;
-                text-align: center;
-                padding: 0.4rem;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                width: 48px;
+                height: 48px;
+                font-size: 1.4rem;
+                color: #9ca3af;
+                flex-shrink: 0;
             }
-            #side-controls .panel:first-child > * { display: none; }
-            /* Expanded state: tap to reveal */
+            #side-controls .panel { display: none; }
+            /* Expanded state: tap/hover to reveal */
             #side-controls:focus-within,
             #side-controls:hover {
-                max-width: 200px;
+                width: 200px;
+                height: auto;
                 max-height: 400px;
             }
-            #side-controls:focus-within .panel:first-child > *,
-            #side-controls:hover .panel:first-child > * {
-                display: block;
-            }
-            #side-controls:focus-within .panel:first-child::before,
-            #side-controls:hover .panel:first-child::before {
-                display: none;
-            }
+            #side-controls:focus-within::before,
+            #side-controls:hover::before { display: none; }
+            #side-controls:focus-within .panel,
+            #side-controls:hover .panel { display: block; padding: 0.6rem 0.8rem; }
 
             /* Style buttons — compact strip above camera buttons */
             #style-modes {
