@@ -22,7 +22,6 @@
   // ── Visual style ────────────────────────────────────────────────────────
   let visualStyle = 'rendered';
   const meshMatCache = {};
-
   const LAYER_OVERRIDES = {
     glass: { color: 0xadd8f7, roughness: 0.05, metalness: 0.1, transparent: true, opacity: 0.35 },
     window: { color: 0xadd8f7, roughness: 0.05, metalness: 0.1, transparent: true, opacity: 0.35 },
@@ -64,18 +63,23 @@
 
     const phi = (90 - el) * (Math.PI / 180);
     const theta = (az + 180) * (Math.PI / 180);
-    const dist = modelSpan * 2;
+    const dist = modelSpan * 2.5;
 
+    // Sun follows the model center
     sun.position.set(
-      dist * Math.sin(phi) * Math.cos(theta),
-      dist * Math.cos(phi),
-      dist * Math.sin(phi) * Math.sin(theta)
+      modelCenter.x + dist * Math.sin(phi) * Math.cos(theta),
+      modelCenter.y + dist * Math.cos(phi),
+      modelCenter.z + dist * Math.sin(phi) * Math.sin(theta)
     );
-    
+    sun.target.position.copy(modelCenter);
+    sun.target.updateMatrixWorld();
+
     // Adjust shadow camera to encompass the model
     const d = modelSpan * 1.5;
-    sun.shadow.camera.left = -d; sun.shadow.camera.right = d;
-    sun.shadow.camera.top = d; sun.shadow.camera.bottom = -d;
+    sun.shadow.camera.left = -d;
+    sun.shadow.camera.right = d;
+    sun.shadow.camera.top = d;
+    sun.shadow.camera.bottom = -d;
     sun.shadow.camera.updateProjectionMatrix();
   }
 
@@ -107,20 +111,27 @@
     if ((prev === 'walk' || prev === 'fly') && document.pointerLockElement) document.exitPointerLock();
 
     if (mode === 'orbit') {
-      activeCamera = orbitCamera; orbitControls.enabled = true;
+      activeCamera = orbitCamera;
+      orbitControls.enabled = true;
     } else if (mode === 'walk') {
-      activeCamera = walkCamera; orbitControls.enabled = false;
+      activeCamera = walkCamera;
+      orbitControls.enabled = false;
       const target = orbitControls.target.clone();
       const groundY = getGroundY(target.x, target.z);
-      walkCamera.position.set(target.x, groundY + WALK_HEIGHT, target.z + modelSpan * 0.1);
-      walkCamera.rotation.set(0, 0, 0, 'YXZ'); yaw = 0; pitch = 0;
+      walkCamera.position.set(target.x, groundY + WALK_HEIGHT, target.z + modelSpan * 0.05);
+      walkCamera.rotation.set(0, 0, 0, 'YXZ');
+      yaw = 0; pitch = 0;
     } else if (mode === 'fly') {
-      activeCamera = flyCamera; orbitControls.enabled = false;
+      activeCamera = flyCamera;
+      orbitControls.enabled = false;
       flyCamera.position.copy(orbitCamera.position);
       flyCamera.lookAt(orbitControls.target);
-      yaw = flyCamera.rotation.y; pitch = flyCamera.rotation.x;
+      yaw = flyCamera.rotation.y;
+      pitch = flyCamera.rotation.x;
     } else if (mode === 'ortho') {
-      activeCamera = orthoCamera; orbitControls.enabled = false; syncOrthoCamera();
+      activeCamera = orthoCamera;
+      orbitControls.enabled = false;
+      syncOrthoCamera();
     }
     velocity.set(0, 0, 0);
     updateModeUI();
@@ -139,7 +150,8 @@
 
   function getGroundY(x, z) {
     if (groundMeshes.length === 0) return modelCenter.y;
-    const origin = new THREE.Vector3(x, modelCenter.y + modelSpan * 2, z);
+    // Raycast from high above the model span
+    const origin = new THREE.Vector3(x, modelCenter.y + modelSpan * 5, z);
     raycaster.set(origin, downVec);
     const hits = raycaster.intersectObjects(groundMeshes, false);
     return hits.length > 0 ? hits[0].point.y : modelCenter.y;
@@ -149,13 +161,18 @@
     if (groundMeshes.length === 0) return false;
     const dirs = [
       new THREE.Vector3(1, 0, 0), new THREE.Vector3(-1, 0, 0),
-      new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 0, -1),
-      new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, -1, 0)
+      new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 0, -1)
     ];
-    for (let d of dirs) {
-      raycaster.set(pos, d);
-      const hits = raycaster.intersectObjects(groundMeshes, false);
-      if (hits.length > 0 && hits[0].distance < radius) return true;
+    // Cast rays at different heights for better coverage
+    const heights = [0.5, WALK_HEIGHT, WALK_HEIGHT * 0.8];
+    for (let h of heights) {
+      const p = pos.clone();
+      p.y = pos.y - WALK_HEIGHT + h;
+      for (let d of dirs) {
+        raycaster.set(p, d);
+        const hits = raycaster.intersectObjects(groundMeshes, false);
+        if (hits.length > 0 && hits[0].distance < radius) return true;
+      }
     }
     return false;
   }
@@ -167,7 +184,9 @@
       orbitCamera.position.set(modelCenter.x + d * 1.4, modelCenter.y + d * 1.2, modelCenter.z + d * 1.4);
       orbitControls.target.copy(modelCenter);
       orbitControls.update();
-    } else if (cameraMode === 'ortho') { syncOrthoCamera(); }
+    } else if (cameraMode === 'ortho') {
+      syncOrthoCamera();
+    }
   }
   window.resetCamera = resetCamera;
 
@@ -178,8 +197,13 @@
     Object.keys(LAYER_OVERRIDES).forEach(function(k) {
       if (!ovr && lname.indexOf(k) !== -1) ovr = LAYER_OVERRIDES[k];
     });
-    const rendParams = ovr ? Object.assign({ side: THREE.DoubleSide }, ovr)
-                           : { color: hexColor, roughness: 0.72, metalness: 0.05, side: THREE.DoubleSide };
+
+    const rendParams = ovr ? Object.assign({ side: THREE.DoubleSide }, ovr) : { color: hexColor, roughness: 0.72, metalness: 0.05, side: THREE.DoubleSide };
+    // Add polygon offset to prevent flickering (Z-fighting)
+    rendParams.polygonOffset = true;
+    rendParams.polygonOffsetFactor = 1;
+    rendParams.polygonOffsetUnits = 1;
+
     const rendered = new THREE.MeshStandardMaterial(rendParams);
     const clay = new THREE.MeshStandardMaterial({ color: 0xd4c5b0, roughness: 0.75, metalness: 0.0, side: THREE.DoubleSide });
     const wireframe = new THREE.MeshStandardMaterial({ color: hexColor, wireframe: true, side: THREE.DoubleSide });
@@ -216,22 +240,23 @@
     return (r << 16) | (g << 8) | b;
   }
 
-  function getObjAppearance(obj, layerTable) {
+  function getObjAppearance(obj, doc) {
     let hexColor = 0xcccccc;
     let layerName = '';
     try {
       const attrs = obj.attributes();
-      if (!attrs) return { hexColor, layerName };
       const colorSrc = attrs.colorSource;
       if (colorSrc === 1 || colorSrc === 'object') {
         hexColor = rhinoColorToHex(attrs.objectColor || attrs.drawColor);
       } else {
         const layerIdx = attrs.layerIndex;
-        if (layerTable && layerIdx !== undefined && layerIdx >= 0) {
-          try {
-            const layer = layerTable.get(layerIdx);
-            if (layer) { layerName = layer.name || ''; hexColor = rhinoColorToHex(layer.color); }
-          } catch(e) {}
+        const layerTable = doc.layers();
+        if (layerIdx >= 0 && layerTable) {
+          const layer = layerTable.get(layerIdx);
+          if (layer) {
+            layerName = layer.name || '';
+            hexColor = rhinoColorToHex(layer.color);
+          }
         }
       }
     } catch(e) {}
@@ -243,146 +268,163 @@
     const results = [];
     const hex = appearance ? appearance.hexColor : 0xcccccc;
     const lname = appearance ? appearance.layerName : '';
+
+    // 1. Try JSON conversion (standard)
     if (typeof geom.toThreejsJSON === 'function') {
       try {
         const json = geom.toThreejsJSON();
         const parsed = (typeof json === 'string') ? JSON.parse(json) : json;
         if (parsed && parsed.data && parsed.data.attributes) {
           const geo = new THREE.BufferGeometryLoader().parse(parsed);
-          if (geo) {
-            const matSet = buildMatSet(hex, lname);
-            const mesh = new THREE.Mesh(geo, matSet[visualStyle] || matSet.rendered);
-            meshMatCache[mesh.uuid] = matSet;
-            results.push(mesh);
-            return results;
-          }
-        }
-      } catch(e) { console.warn('toThreejsJSON failed:', e.message); }
-    }
-    if (typeof geom.getMesh === 'function') {
-      const meshTypes = [];
-      try { meshTypes.push(rhino.MeshType.Any); } catch(e) {}
-      try { meshTypes.push(rhino.MeshType.Default); } catch(e) {}
-      try { meshTypes.push(rhino.MeshType.Render); } catch(e) {}
-      meshTypes.push(0, 1, 2, 3, 4);
-      for (let mi = 0; mi < meshTypes.length; mi++) {
-        try {
-          const rm = geom.getMesh(meshTypes[mi]);
-          if (rm && typeof rm.toThreejsJSON === 'function') {
-            const json = rm.toThreejsJSON();
-            const parsed = (typeof json === 'string') ? JSON.parse(json) : json;
-            if (parsed && parsed.data && parsed.data.attributes) {
-              const geo = new THREE.BufferGeometryLoader().parse(parsed);
-              if (geo) {
-                const matSet = buildMatSet(hex, lname);
-                const mesh = new THREE.Mesh(geo, matSet[visualStyle] || matSet.rendered);
-                meshMatCache[mesh.uuid] = matSet;
-                try { rm.delete(); } catch(e) {}
-                results.push(mesh);
-                return results;
-              }
-            }
-            try { rm.delete(); } catch(e) {}
-          }
-        } catch(e) {}
-      }
-    }
-    if (typeof geom.domain !== 'undefined' && typeof geom.pointAt === 'function') {
-      try {
-        const domain = geom.domain;
-        const t0 = (domain && domain.min !== undefined) ? domain.min : 0;
-        const t1 = (domain && domain.max !== undefined) ? domain.max : 1;
-        if (t1 > t0) {
-          const pts = [], steps = 80;
-          for (let s = 0; s <= steps; s++) {
-            const t = t0 + (t1 - t0) * (s / steps);
-            try {
-              const pt = geom.pointAt(t);
-              if (pt && pt.length >= 3) pts.push(new THREE.Vector3(pt[0], pt[1], pt[2]));
-            } catch(e) {}
-          }
-          if (pts.length >= 2) {
-            const geo = new THREE.BufferGeometry().setFromPoints(pts);
-            results.push(new THREE.Line(geo, makeLineMat(hex)));
-            return results;
-          }
-        }
-      } catch(e) { console.warn('Curve sampling failed:', e.message); }
-    }
-    if (typeof geom.location !== 'undefined') {
-      try {
-        const loc = geom.location;
-        if (loc && loc.length >= 3) {
-          const geo = new THREE.BufferGeometry();
-          geo.setAttribute('position', new THREE.Float32BufferAttribute([loc[0], loc[1], loc[2]], 3));
-          results.push(new THREE.Points(geo, new THREE.PointsMaterial({ color: hex, size: 0.5 })));
+          const matSet = buildMatSet(hex, lname);
+          const mesh = new THREE.Mesh(geo, matSet[visualStyle] || matSet.rendered);
+          meshMatCache[mesh.uuid] = matSet;
+          results.push(mesh);
           return results;
         }
       } catch(e) {}
     }
+
+    // 2. Try Mesh extraction (Breps, Extrusions, SubD)
+    if (typeof geom.getMesh === 'function') {
+      const types = [rhino.MeshType.Any, rhino.MeshType.Render, rhino.MeshType.Default];
+      for (let t of types) {
+        try {
+          const rm = geom.getMesh(t);
+          if (rm) {
+            const json = rm.toThreejsJSON();
+            const geo = new THREE.BufferGeometryLoader().parse(JSON.parse(json));
+            const matSet = buildMatSet(hex, lname);
+            const mesh = new THREE.Mesh(geo, matSet[visualStyle] || matSet.rendered);
+            meshMatCache[mesh.uuid] = matSet;
+            results.push(mesh);
+            rm.delete();
+            return results;
+          }
+        } catch(e) {}
+      }
+    }
+
+    // 3. Special handling for Curves
+    if (geom.domain && typeof geom.pointAt === 'function') {
+      const pts = [], steps = 100;
+      const d = geom.domain;
+      for (let i = 0; i <= steps; i++) {
+        const t = d[0] + (d[1] - d[0]) * (i / steps);
+        const p = geom.pointAt(t);
+        pts.push(new THREE.Vector3(p[0], p[1], p[2]));
+      }
+      const geo = new THREE.BufferGeometry().setFromPoints(pts);
+      results.push(new THREE.Line(geo, makeLineMat(hex)));
+    }
+
+    // 4. Points
+    if (geom.location) {
+      const p = geom.location;
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute([p[0], p[1], p[2]], 3));
+      results.push(new THREE.Points(geo, new THREE.PointsMaterial({ color: hex, size: 0.5 })));
+    }
+
     return results;
   }
 
-  // ── Model loading ────────────────────────────────────────────────────────
+  // ── Model processing ─────────────────────────────────────────────────────
+  function processDocObjects(doc, rhino, shadowEnabled) {
+    const mainGroup = new THREE.Group();
+    const objs = doc.objects();
+    const idefs = doc.instanceDefinitions();
+
+    function recurse(obj, parentGroup, transform) {
+      const geom = obj.geometry();
+      if (!geom) return;
+
+      if (geom instanceof rhino.InstanceReferenceGeometry) {
+        // Handle Blocks
+        const idef = idefs.findId(geom.parentIdefId);
+        if (idef) {
+          const blockGroup = new THREE.Group();
+          const ids = idef.getObjectIds();
+          ids.forEach(uuid => {
+            const childObj = doc.objects().findId(uuid);
+            if (childObj) recurse(childObj, blockGroup, null);
+          });
+          // Apply block transform
+          const m = new THREE.Matrix4().fromArray(geom.xform.toArray());
+          blockGroup.applyMatrix4(m);
+          parentGroup.add(blockGroup);
+        }
+      } else {
+        // Handle standard geometry
+        const appearance = getObjAppearance(obj, doc);
+        const threeObjs = rhinoGeomToThreeObjs(geom, rhino, appearance);
+        threeObjs.forEach(o => {
+          if (o.isMesh) o.castShadow = o.receiveShadow = shadowEnabled;
+          parentGroup.add(o);
+        });
+      }
+    }
+
+    for (let i = 0; i < objs.count; i++) {
+      recurse(objs.get(i), mainGroup, null);
+    }
+    return mainGroup;
+  }
+
   function loadModel() {
     const name = getModelFromQuery();
     showLoading('Downloading ' + name + '...');
     rhino3dm().then(async function(rhino) {
       try {
         const res = await fetch('models/' + name);
-        if (!res.ok) throw new Error('HTTP ' + res.status + ': model not found');
+        if (!res.ok) throw new Error('Model not found');
         const buf = await res.arrayBuffer();
         showLoading('Parsing geometry...');
         const doc = rhino.File3dm.fromByteArray(new Uint8Array(buf));
-        if (!doc) throw new Error('Could not parse Rhino document');
-        let layerTable = null;
-        try { layerTable = doc.layers(); } catch(e) {}
-        const group = new THREE.Group();
-        group.rotation.x = -Math.PI / 2;
-        const objs = doc.objects();
-        const total = objs.count;
         const shadowEnabled = document.getElementById('toggle-shadows').checked;
-        for (let i = 0; i < total; i++) {
-          try {
-            const obj = objs.get(i); if (!obj) continue;
-            const geom = obj.geometry(); if (!geom) continue;
-            const appearance = getObjAppearance(obj, layerTable);
-            const threeObjs = rhinoGeomToThreeObjs(geom, rhino, appearance);
-            threeObjs.forEach(function(o) { 
-              if (o.isMesh) {
-                o.castShadow = o.receiveShadow = shadowEnabled;
-              }
-              group.add(o); 
-            });
-          } catch(e2) {}
-        }
+        
+        const group = processDocObjects(doc, rhino, shadowEnabled);
         doc.delete();
+        
         if (group.children.length === 0) throw new Error('No renderable geometry found');
-        let hasMesh = false;
-        group.children.forEach(function(c) { if (c.isMesh) hasMesh = true; });
-        is2DModel = !hasMesh;
-        groundMeshes = [];
-        group.traverse(function(c) { if (c.isMesh) groundMeshes.push(c); });
+
+        // Rhino Z-up to Three Y-up
+        group.rotation.x = -Math.PI / 2;
         scene.add(group);
         modelGroup = group;
+
+        // Bounding box for centering and grounding
         const box = new THREE.Box3().setFromObject(group);
         box.getCenter(modelCenter);
         box.getSize(modelSize);
         modelSpan = Math.max(modelSize.x, modelSize.y, modelSize.z) || 10;
+
+        // AUTO-GROUNDING: Move the model so the bottom is at Y=0
+        const yOffset = -box.min.y;
+        group.position.y += yOffset;
+        modelCenter.y += yOffset;
+
+        // Ground meshes for walking
+        groundMeshes = [];
+        group.traverse(c => { if (c.isMesh) groundMeshes.push(c); });
+        is2DModel = groundMeshes.length === 0;
+
+        // Camera setup
         const d = modelSpan;
-        orbitCamera.position.set(modelCenter.x + d * 1.4, modelCenter.y + d * 1.2, modelCenter.z + d * 1.4);
+        orbitCamera.position.set(modelCenter.x + d * 1.3, modelCenter.y + d * 1.1, modelCenter.z + d * 1.3);
         orbitCamera.lookAt(modelCenter);
-        orbitCamera.near = d * 0.001; orbitCamera.far = d * 300;
+        orbitCamera.near = d * 0.001;
+        orbitCamera.far = d * 100;
         orbitCamera.updateProjectionMatrix();
         orbitControls.target.copy(modelCenter);
         orbitControls.update();
+
         walkCamera.near = flyCamera.near = orbitCamera.near;
         walkCamera.far = flyCamera.far = orbitCamera.far;
         walkCamera.updateProjectionMatrix();
         flyCamera.position.copy(orbitCamera.position);
         flyCamera.lookAt(modelCenter);
-        flyCamera.updateProjectionMatrix();
-        yaw = flyCamera.rotation.y; pitch = flyCamera.rotation.x;
+
         syncOrthoCamera();
         setCameraMode(is2DModel ? 'ortho' : 'orbit');
         applyStyle(visualStyle);
@@ -399,38 +441,44 @@
   function init() {
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0x050608);
-    renderer = new THREE.WebGLRenderer({ antialias: true });
+
+    renderer = new THREE.WebGLRenderer({ antialias: true, logarithmicDepthBuffer: true });
     renderer.setPixelRatio(window.devicePixelRatio);
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 0.9;
+    renderer.toneMappingExposure = 0.95;
     document.body.appendChild(renderer.domElement);
+
     const aspect = window.innerWidth / window.innerHeight;
     orbitCamera = new THREE.PerspectiveCamera(50, aspect, 0.1, 1000000);
     orbitControls = new THREE.OrbitControls(orbitCamera, renderer.domElement);
     orbitControls.enableDamping = true;
     orbitControls.dampingFactor = 0.08;
-    orbitControls.maxPolarAngle = Math.PI * 0.88;
-    orbitControls.minDistance = 0.5;
+    orbitControls.maxPolarAngle = Math.PI * 0.9;
+
     walkCamera = new THREE.PerspectiveCamera(75, aspect, 0.1, 1000000);
     walkCamera.rotation.order = 'YXZ';
     flyCamera = new THREE.PerspectiveCamera(75, aspect, 0.1, 1000000);
     flyCamera.rotation.order = 'YXZ';
     orthoCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 1000000);
+
     activeCamera = orbitCamera;
-    hemi = new THREE.HemisphereLight(0xd6e4f0, 0x3a3020, 0.6);
+
+    hemi = new THREE.HemisphereLight(0xd6e4f0, 0x3a3020, 0.65);
     scene.add(hemi);
-    sun = new THREE.DirectionalLight(0xfff5e0, 1.1);
-    sun.position.set(20, 40, 20);
+
+    sun = new THREE.DirectionalLight(0xfff5e0, 1.2);
     sun.castShadow = true;
     sun.shadow.mapSize.width = sun.shadow.mapSize.height = 2048;
-    sun.shadow.camera.near = 0.5;
+    sun.shadow.camera.near = 1;
     sun.shadow.camera.far = 10000;
     scene.add(sun);
-    fill = new THREE.DirectionalLight(0x8899cc, 0.35);
-    fill.position.set(-3, -1, -2);
+    scene.add(sun.target);
+
+    fill = new THREE.DirectionalLight(0x8899cc, 0.3);
+    fill.position.set(-5, 2, -5);
     scene.add(fill);
 
     window.addEventListener('resize', function() {
@@ -444,43 +492,41 @@
       syncOrthoCamera();
     });
 
-    window.addEventListener('keydown', function(e) {
+    window.addEventListener('keydown', e => {
       keys[e.code] = true;
       if (e.code === 'Digit1') setCameraMode('orbit');
       if (e.code === 'Digit2') setCameraMode('walk');
       if (e.code === 'Digit3') setCameraMode('fly');
       if (e.code === 'Digit4') setCameraMode('ortho');
       if (e.code === 'KeyR') resetCamera();
-      if (e.code === 'Space' && (cameraMode === 'walk' || cameraMode === 'fly')) e.preventDefault();
     });
-    window.addEventListener('keyup', function(e) { keys[e.code] = false; });
+    window.addEventListener('keyup', e => { keys[e.code] = false; });
 
-    window.addEventListener('mousemove', function(e) {
+    window.addEventListener('mousemove', e => {
       if (cameraMode !== 'walk' && cameraMode !== 'fly') return;
       if (document.pointerLockElement !== renderer.domElement) return;
       yaw -= e.movementX * 0.002;
       pitch -= e.movementY * 0.002;
-      pitch = Math.max(-Math.PI / 2 + 0.01, Math.min(Math.PI / 2 - 0.01, pitch));
+      pitch = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, pitch));
       if (cameraMode === 'walk') walkCamera.rotation.set(pitch, yaw, 0, 'YXZ');
       else flyCamera.rotation.set(pitch, yaw, 0, 'YXZ');
     });
 
-    renderer.domElement.addEventListener('click', function() {
+    renderer.domElement.addEventListener('click', () => {
       if (cameraMode === 'walk' || cameraMode === 'fly') renderer.domElement.requestPointerLock();
     });
 
     document.getElementById('sun-az').addEventListener('input', updateSun);
     document.getElementById('sun-el').addEventListener('input', updateSun);
-    document.getElementById('toggle-shadows').addEventListener('change', function(e) {
-      toggleShadows(e.target.checked);
-    });
+    document.getElementById('toggle-shadows').addEventListener('change', e => toggleShadows(e.target.checked));
 
+    // Ortho navigation
     let orthoDrag = false, orthoLast = { x: 0, y: 0 };
-    renderer.domElement.addEventListener('mousedown', function(e) {
+    renderer.domElement.addEventListener('mousedown', e => {
       if (cameraMode === 'ortho') { orthoDrag = true; orthoLast = { x: e.clientX, y: e.clientY }; }
     });
-    window.addEventListener('mouseup', function() { orthoDrag = false; });
-    window.addEventListener('mousemove', function(e) {
+    window.addEventListener('mouseup', () => { orthoDrag = false; });
+    window.addEventListener('mousemove', e => {
       if (!orthoDrag || cameraMode !== 'ortho') return;
       const dx = (e.clientX - orthoLast.x) / window.innerWidth * (orthoCamera.right - orthoCamera.left);
       const dz = (e.clientY - orthoLast.y) / window.innerHeight * (orthoCamera.top - orthoCamera.bottom);
@@ -488,27 +534,26 @@
       orthoCamera.position.z += dz;
       orthoLast = { x: e.clientX, y: e.clientY };
     });
-    renderer.domElement.addEventListener('wheel', function(e) {
+    renderer.domElement.addEventListener('wheel', e => {
       if (cameraMode !== 'ortho') return;
       const f = e.deltaY > 0 ? 1.1 : 0.9;
-      orthoCamera.left *= f; orthoCamera.right *= f;
-      orthoCamera.top *= f; orthoCamera.bottom *= f;
+      orthoCamera.left *= f; orthoCamera.right *= f; orthoCamera.top *= f; orthoCamera.bottom *= f;
       orthoCamera.updateProjectionMatrix();
     }, { passive: true });
 
-    document.querySelectorAll('.cam-btn').forEach(function(btn) {
-      btn.addEventListener('click', function() { setCameraMode(btn.dataset.mode); });
+    document.querySelectorAll('.cam-btn').forEach(btn => {
+      btn.addEventListener('click', () => setCameraMode(btn.dataset.mode));
     });
-    document.querySelectorAll('.style-btn').forEach(function(btn) {
-      btn.addEventListener('click', function() { applyStyle(btn.dataset.style); });
+    document.querySelectorAll('.style-btn').forEach(btn => {
+      btn.addEventListener('click', () => applyStyle(btn.dataset.style));
     });
 
     loadModel();
 
     (function anim() {
       requestAnimationFrame(anim);
-      const spd = modelSpan * 0.003;
-      const radius = 0.4;
+      const spd = modelSpan * 0.004;
+      const radius = 0.5;
 
       if (cameraMode === 'walk') {
         const forward = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
@@ -518,7 +563,7 @@
         if (keys['KeyS']) move.addScaledVector(forward, -1);
         if (keys['KeyA']) move.addScaledVector(right, -1);
         if (keys['KeyD']) move.add(right);
-        
+
         if (move.lengthSq() > 0) velocity.addScaledVector(move.normalize(), spd);
         velocity.multiplyScalar(damping);
 
@@ -558,5 +603,6 @@
       renderer.render(scene, activeCamera);
     })();
   }
+
   init();
 })();
