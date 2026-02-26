@@ -157,9 +157,15 @@
         if ((prev === 'walk' || prev === 'fly') && document.pointerLockElement) document.exitPointerLock();
 
         if (mode === 'orbit') {
-            activeCamera = isOrthoOrbit ? orthoCamera : orbitCamera;
-            orbitControls.object = activeCamera;
-            orbitControls.enabled = true;
+             activeCamera = isOrthoOrbit ? orthoCamera : orbitCamera;
+    orbitControls.object = activeCamera;
+    orbitControls.enabled = true;
+    orbitControls.enableRotate = true;
+    orbitControls.mouseButtons = {  // ← ADD THIS
+        LEFT: THREE.MOUSE.ROTATE,
+        MIDDLE: THREE.MOUSE.DOLLY,
+        RIGHT: THREE.MOUSE.PAN
+    };
         } else if (mode === 'walk') {
             activeCamera = walkCamera; orbitControls.enabled = false;
             const target = orbitControls.target.clone();
@@ -172,8 +178,16 @@
             flyCamera.position.copy(orbitCamera.position); flyCamera.lookAt(orbitControls.target);
             yaw = flyCamera.rotation.y; pitch = flyCamera.rotation.x;
         } else if (mode === 'ortho') {
-            activeCamera = orthoCamera; orbitControls.enabled = false;
-            syncOrthoCamera();
+    activeCamera = orthoCamera;
+    orbitControls.object = orthoCamera;
+    orbitControls.enabled = true;
+    orbitControls.enableRotate = false;
+    orbitControls.mouseButtons = {  // ← ADD THIS
+        LEFT: THREE.MOUSE.PAN,
+        MIDDLE: THREE.MOUSE.DOLLY,
+        RIGHT: THREE.MOUSE.PAN
+    };
+    syncOrthoCamera();
         }
         velocity.set(0, 0, 0);
         updateModeUI();
