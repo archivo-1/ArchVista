@@ -3,6 +3,7 @@
 
   // ── Core scene objects ──────────────────────────────────────────────────
   let scene, renderer, orbitCamera, walkCamera, flyCamera, orthoCamera, activeCamera, orbitControls;
+  let sun, hemi, fill;
   let cameraMode = 'orbit'; // 'orbit' | 'walk' | 'fly' | 'ortho'
   let is2DModel = false;
   let modelGroup = null;
@@ -22,7 +23,6 @@
   let visualStyle = 'rendered';
   const meshMatCache = {};
 
-  // Special layer-name keywords -> material overrides
   const LAYER_OVERRIDES = {
     glass: { color: 0xadd8f7, roughness: 0.05, metalness: 0.1, transparent: true, opacity: 0.35 },
     window: { color: 0xadd8f7, roughness: 0.05, metalness: 0.1, transparent: true, opacity: 0.35 },
@@ -52,6 +52,41 @@
   function hideLoading() {
     const el = document.getElementById('loading');
     if (el) el.classList.add('hidden');
+  }
+
+  // ── Environment updates ──────────────────────────────────────────────────
+  function updateSun() {
+    if (!sun) return;
+    const az = parseFloat(document.getElementById('sun-az').value);
+    const el = parseFloat(document.getElementById('sun-el').value);
+    document.getElementById('az-val').textContent = az + '°';
+    document.getElementById('el-val').textContent = el + '°';
+
+    const phi = (90 - el) * (Math.PI / 180);
+    const theta = (az + 180) * (Math.PI / 180);
+    const dist = modelSpan * 2;
+
+    sun.position.set(
+      dist * Math.sin(phi) * Math.cos(theta),
+      dist * Math.cos(phi),
+      dist * Math.sin(phi) * Math.sin(theta)
+    );
+    
+    // Adjust shadow camera to encompass the model
+    const d = modelSpan * 1.5;
+    sun.shadow.camera.left = -d; sun.shadow.camera.right = d;
+    sun.shadow.camera.top = d; sun.shadow.camera.bottom = -d;
+    sun.shadow.camera.updateProjectionMatrix();
+  }
+
+  function toggleShadows(enabled) {
+    if (!renderer || !sun) return;
+    sun.castShadow = enabled;
+    if (modelGroup) {
+      modelGroup.traverse(function(obj) {
+        if (obj.isMesh) obj.castShadow = obj.receiveShadow = enabled;
+      });
+    }
   }
 
   // ── Camera mode UI ───────────────────────────────────────────────────────
@@ -306,13 +341,19 @@
         group.rotation.x = -Math.PI / 2;
         const objs = doc.objects();
         const total = objs.count;
+        const shadowEnabled = document.getElementById('toggle-shadows').checked;
         for (let i = 0; i < total; i++) {
           try {
             const obj = objs.get(i); if (!obj) continue;
             const geom = obj.geometry(); if (!geom) continue;
             const appearance = getObjAppearance(obj, layerTable);
             const threeObjs = rhinoGeomToThreeObjs(geom, rhino, appearance);
-            threeObjs.forEach(function(o) { group.add(o); });
+            threeObjs.forEach(function(o) { 
+              if (o.isMesh) {
+                o.castShadow = o.receiveShadow = shadowEnabled;
+              }
+              group.add(o); 
+            });
           } catch(e2) {}
         }
         doc.delete();
@@ -345,6 +386,7 @@
         syncOrthoCamera();
         setCameraMode(is2DModel ? 'ortho' : 'orbit');
         applyStyle(visualStyle);
+        updateSun();
         hideLoading();
       } catch(e) {
         console.error(e);
@@ -360,7 +402,8 @@
     renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setPixelRatio(window.devicePixelRatio);
     renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.shadowMap.enabled = false;
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 0.9;
     document.body.appendChild(renderer.domElement);
@@ -377,12 +420,16 @@
     flyCamera.rotation.order = 'YXZ';
     orthoCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 1000000);
     activeCamera = orbitCamera;
-    const hemi = new THREE.HemisphereLight(0xd6e4f0, 0x3a3020, 0.6);
+    hemi = new THREE.HemisphereLight(0xd6e4f0, 0x3a3020, 0.6);
     scene.add(hemi);
-    const sun = new THREE.DirectionalLight(0xfff5e0, 1.1);
-    sun.position.set(2, 4, 2);
+    sun = new THREE.DirectionalLight(0xfff5e0, 1.1);
+    sun.position.set(20, 40, 20);
+    sun.castShadow = true;
+    sun.shadow.mapSize.width = sun.shadow.mapSize.height = 2048;
+    sun.shadow.camera.near = 0.5;
+    sun.shadow.camera.far = 10000;
     scene.add(sun);
-    const fill = new THREE.DirectionalLight(0x8899cc, 0.35);
+    fill = new THREE.DirectionalLight(0x8899cc, 0.35);
     fill.position.set(-3, -1, -2);
     scene.add(fill);
 
@@ -420,6 +467,12 @@
 
     renderer.domElement.addEventListener('click', function() {
       if (cameraMode === 'walk' || cameraMode === 'fly') renderer.domElement.requestPointerLock();
+    });
+
+    document.getElementById('sun-az').addEventListener('input', updateSun);
+    document.getElementById('sun-el').addEventListener('input', updateSun);
+    document.getElementById('toggle-shadows').addEventListener('change', function(e) {
+      toggleShadows(e.target.checked);
     });
 
     let orthoDrag = false, orthoLast = { x: 0, y: 0 };
