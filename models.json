@@ -1,0 +1,20 @@
+[
+  {
+    "id": "torpederas-valparaisoCLS",
+    "name": "Torpederas de Valparaíso",
+    "file": "torpederas-valparaisoCLS.3dm",
+    "description": "Coastal terrain and naval historical complex in Valparaíso, Chile.",
+    "category": "site",
+    "size": "~16 MB",
+    "thumbnail": ""
+  },
+  {
+    "id": "new-building",
+    "name": "Your New Building",
+    "file": "cables3d.3dm",
+    "description": "Description here",
+    "category": "building",
+    "size": "~10 MB",
+    "thumbnail": "thumbnails/new-building.jpg"
+  }
+]
