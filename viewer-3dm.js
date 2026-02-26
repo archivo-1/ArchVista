@@ -65,7 +65,6 @@
     const theta = (az + 180) * (Math.PI / 180);
     const dist = modelSpan * 2.5;
 
-    // Sun follows the model center
     sun.position.set(
       modelCenter.x + dist * Math.sin(phi) * Math.cos(theta),
       modelCenter.y + dist * Math.cos(phi),
@@ -74,7 +73,6 @@
     sun.target.position.copy(modelCenter);
     sun.target.updateMatrixWorld();
 
-    // Adjust shadow camera to encompass the model
     const d = modelSpan * 1.5;
     sun.shadow.camera.left = -d;
     sun.shadow.camera.right = d;
@@ -150,7 +148,6 @@
 
   function getGroundY(x, z) {
     if (groundMeshes.length === 0) return modelCenter.y;
-    // Raycast from high above the model span
     const origin = new THREE.Vector3(x, modelCenter.y + modelSpan * 5, z);
     raycaster.set(origin, downVec);
     const hits = raycaster.intersectObjects(groundMeshes, false);
@@ -163,7 +160,6 @@
       new THREE.Vector3(1, 0, 0), new THREE.Vector3(-1, 0, 0),
       new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 0, -1)
     ];
-    // Cast rays at different heights for better coverage
     const heights = [0.5, WALK_HEIGHT, WALK_HEIGHT * 0.8];
     for (let h of heights) {
       const p = pos.clone();
@@ -199,7 +195,6 @@
     });
 
     const rendParams = ovr ? Object.assign({ side: THREE.DoubleSide }, ovr) : { color: hexColor, roughness: 0.72, metalness: 0.05, side: THREE.DoubleSide };
-    // Add polygon offset to prevent flickering (Z-fighting)
     rendParams.polygonOffset = true;
     rendParams.polygonOffsetFactor = 1;
     rendParams.polygonOffsetUnits = 1;
@@ -269,7 +264,6 @@
     const hex = appearance ? appearance.hexColor : 0xcccccc;
     const lname = appearance ? appearance.layerName : '';
 
-    // 1. Try JSON conversion (standard)
     if (typeof geom.toThreejsJSON === 'function') {
       try {
         const json = geom.toThreejsJSON();
@@ -285,7 +279,6 @@
       } catch(e) {}
     }
 
-    // 2. Try Mesh extraction (Breps, Extrusions, SubD)
     if (typeof geom.getMesh === 'function') {
       const types = [rhino.MeshType.Any, rhino.MeshType.Render, rhino.MeshType.Default];
       for (let t of types) {
@@ -305,7 +298,6 @@
       }
     }
 
-    // 3. Special handling for Curves
     if (geom.domain && typeof geom.pointAt === 'function') {
       const pts = [], steps = 100;
       const d = geom.domain;
@@ -318,7 +310,6 @@
       results.push(new THREE.Line(geo, makeLineMat(hex)));
     }
 
-    // 4. Points
     if (geom.location) {
       const p = geom.location;
       const geo = new THREE.BufferGeometry();
@@ -335,11 +326,12 @@
     const objs = doc.objects();
     const idefs = doc.instanceDefinitions();
 
-    function recurse(obj, parentGroup, transform) {
+    function recurse(obj, parentGroup) {
       const geom = obj.geometry();
       if (!geom) return;
 
-      if (geom instanceof rhino.InstanceReferenceGeometry) {
+      // Use objectType instead of instanceof to avoid "is not an object" error
+      if (rhino.ObjectType && geom.objectType === rhino.ObjectType.InstanceReference) {
         // Handle Blocks
         const idef = idefs.findId(geom.parentIdefId);
         if (idef) {
@@ -347,15 +339,13 @@
           const ids = idef.getObjectIds();
           ids.forEach(uuid => {
             const childObj = doc.objects().findId(uuid);
-            if (childObj) recurse(childObj, blockGroup, null);
+            if (childObj) recurse(childObj, blockGroup);
           });
-          // Apply block transform
           const m = new THREE.Matrix4().fromArray(geom.xform.toArray());
           blockGroup.applyMatrix4(m);
           parentGroup.add(blockGroup);
         }
       } else {
-        // Handle standard geometry
         const appearance = getObjAppearance(obj, doc);
         const threeObjs = rhinoGeomToThreeObjs(geom, rhino, appearance);
         threeObjs.forEach(o => {
@@ -366,7 +356,7 @@
     }
 
     for (let i = 0; i < objs.count; i++) {
-      recurse(objs.get(i), mainGroup, null);
+      recurse(objs.get(i), mainGroup);
     }
     return mainGroup;
   }
@@ -388,28 +378,23 @@
         
         if (group.children.length === 0) throw new Error('No renderable geometry found');
 
-        // Rhino Z-up to Three Y-up
         group.rotation.x = -Math.PI / 2;
         scene.add(group);
         modelGroup = group;
 
-        // Bounding box for centering and grounding
         const box = new THREE.Box3().setFromObject(group);
         box.getCenter(modelCenter);
         box.getSize(modelSize);
         modelSpan = Math.max(modelSize.x, modelSize.y, modelSize.z) || 10;
 
-        // AUTO-GROUNDING: Move the model so the bottom is at Y=0
         const yOffset = -box.min.y;
         group.position.y += yOffset;
         modelCenter.y += yOffset;
 
-        // Ground meshes for walking
         groundMeshes = [];
         group.traverse(c => { if (c.isMesh) groundMeshes.push(c); });
         is2DModel = groundMeshes.length === 0;
 
-        // Camera setup
         const d = modelSpan;
         orbitCamera.position.set(modelCenter.x + d * 1.3, modelCenter.y + d * 1.1, modelCenter.z + d * 1.3);
         orbitCamera.lookAt(modelCenter);
@@ -520,7 +505,6 @@
     document.getElementById('sun-el').addEventListener('input', updateSun);
     document.getElementById('toggle-shadows').addEventListener('change', e => toggleShadows(e.target.checked));
 
-    // Ortho navigation
     let orthoDrag = false, orthoLast = { x: 0, y: 0 };
     renderer.domElement.addEventListener('mousedown', e => {
       if (cameraMode === 'ortho') { orthoDrag = true; orthoLast = { x: e.clientX, y: e.clientY }; }
