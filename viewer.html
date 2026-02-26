@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ArchVista - Visor 3D</title>
+    <title>ArchVista - 3D Viewer</title>
     <style>
         * { box-sizing: border-box; }
         html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #050608; color: #f5f5f5; font-family: system-ui, -apple-system, sans-serif; }
@@ -184,16 +184,16 @@
     <!-- Loading overlay -->
     <div id="loading">
         <div class="spinner"></div>
-        <p>ArchVista - VCargando modeloisor 3D...</p>
+        <p>Loading model...</p>
     </div>
 
     <!-- Controls overlay (top-left) -->
     <div id="overlay">
-        <h1ArchVista - V>Controles<Cargando modeloisor 3D/h1>
+        <h1>Controls</h1>
         <div id="orbit-controls">
-            <p class="ctrl-row"><span class="ctrl-key">ArchVista - VArrastrar izq>Controles<Cargando modeloisor 3D</span> Orbit</p>
-            <p class="ctrl-row"><span class="ctrl-key">ArchVista - VArrastrar derArrastrar izq>Controles<Cargando modeloisor 3D</span> Pan</p>
-            <p class="ctrl-row"><span class="ctrl-key"ArchVista - V>Desplazar<Arrastrar derArrastrar izq>Controles<Cargando modeloisor 3D/span> Zoom</p>
+            <p class="ctrl-row"><span class="ctrl-key">Left-drag</span> Orbit</p>
+            <p class="ctrl-row"><span class="ctrl-key">Right-drag</span> Pan</p>
+            <p class="ctrl-row"><span class="ctrl-key">Scroll</span> Zoom</p>
             <p class="ctrl-row"><span class="ctrl-key">R</span> Reset view</p>
         </div>
         <div id="walk-controls" style="display:none">
@@ -210,8 +210,8 @@
             <p class="ctrl-row"><span class="ctrl-key">Esc</span> Release</p>
         </div>
         <div id="ortho-controls" style="display:none">
-            <p class="ctrl-row"><span class="ctrl-key"ArchVista - V>Arrastrar<>Caminar<>Restablecer vista<Desplazar>Órbita<>Acercar<>Desplazar<Arrastrar derArrastrar izq>Controles<Cargando modeloisor 3D/span> Pan</p>
-            <p class="ctrl-row"><span class="ctrl-key"ArchVista - V>Desplazar<Arrastrar derArrastrar izq>Controles<Cargando modeloisor 3D/span> Zoom</p>
+            <p class="ctrl-row"><span class="ctrl-key">Drag</span> Pan</p>
+            <p class="ctrl-row"><span class="ctrl-key">Scroll</span> Zoom</p>
             <p class="ctrl-row"><span class="ctrl-key">R</span> Reset view</p>
         </div>
         <div class="mode-indicator">Mode: <span id="mode-label">Orbit</span></div>
@@ -226,7 +226,7 @@
             var p=document.getElementById('layers-panel');
             p.classList.toggle('collapsed');
         })()">
-            <h2ArchVista - V>CAPAS<>Arrastrar<>Caminar<>Restablecer vista<Desplazar>Órbita<>Acercar<>Desplazar<Arrastrar derArrastrar izq>Controles<Cargando modeloisor 3D/h2>
+            <h2>Layers</h2>
             <span id="layers-chevron">&#9660;</span>
         </div>
         <div id="layers-body">
@@ -236,9 +236,9 @@
 
     <!-- Style switcher -->
     <div id="style-modes">
-        <button class="style-btn active" data-style="rendered"ArchVista - V>Renderizado<>CAPAS<>Arrastrar<>Caminar<>Restablecer vista<Desplazar>Órbita<>Acercar<>Desplazar<Arrastrar derArrastrar izq>Controles<Cargando modeloisor 3D/button>
-        <button class="style-btn" data-style="clay"ArchVista - V>Arcilla<>Renderizado<>CAPAS<>Arrastrar<>Caminar<>Restablecer vista<Desplazar>Órbita<>Acercar<>Desplazar<Arrastrar derArrastrar izq>Controles<Cargando modeloisor 3D/button>
-        <button class="style-btn" data-style="wireframe"ArchVista - V>Malla<>Arcilla<>Renderizado<>CAPAS<>Arrastrar<>Caminar<>Restablecer vista<Desplazar>Órbita<>Acercar<>Desplazar<Arrastrar derArrastrar izq>Controles<Cargando modeloisor 3D/button>
+        <button class="style-btn active" data-style="rendered">Rendered</button>
+        <button class="style-btn" data-style="clay">Clay</button>
+        <button class="style-btn" data-style="wireframe">Wireframe</button>
         <button class="style-btn" data-style="xray">X-Ray</button>
     </div>
 
@@ -254,14 +254,14 @@
     <!-- Side controls (bottom-right) -->
     <div id="side-controls">
         <div id="bg-controls" class="panel">
-            <labelArchVista - V>Fondo<>Vista Superior<>Ortogonal<>Malla<>Arcilla<>Renderizado<>CAPAS<>Arrastrar<>Caminar<>Restablecer vista<Desplazar>Órbita<>Acercar<>Desplazar<Arrastrar derArrastrar izq>Controles<Cargando modeloisor 3D/label>
+            <label>Background</label>
             <select id="bg-select">
-                <option value="black"ArchVista - V>Negro<>Fondo<>Vista Superior<>Ortogonal<>Malla<>Arcilla<>Renderizado<>CAPAS<>Arrastrar<>Caminar<>Restablecer vista<Desplazar>Órbita<>Acercar<>Desplazar<Arrastrar derArrastrar izq>Controles<Cargando modeloisor 3D/option>
-                <option value="white"ArchVista - V>Blanco<>Negro<>Fondo<>Vista Superior<>Ortogonal<>Malla<>Arcilla<>Renderizado<>CAPAS<>Arrastrar<>Caminar<>Restablecer vista<Desplazar>Órbita<>Acercar<>Desplazar<Arrastrar derArrastrar izq>Controles<Cargando modeloisor 3D/option>
-                <option value="grey"ArchVista - V>Gris<>Blanco<>Negro<>Fondo<>Vista Superior<>Ortogonal<>Malla<>Arcilla<>Renderizado<>CAPAS<>Arrastrar<>Caminar<>Restablecer vista<Desplazar>Órbita<>Acercar<>Desplazar<Arrastrar derArrastrar izq>Controles<Cargando modeloisor 3D/option>
-                <option value="sky"ArchVista - V>Cielo Procedimental<>Gris<>Blanco<>Negro<>Fondo<>Vista Superior<>Ortogonal<>Malla<>Arcilla<>Renderizado<>CAPAS<>Arrastrar<>Caminar<>Restablecer vista<Desplazar>Órbita<>Acercar<>Desplazar<Arrastrar derArrastrar izq>Controles<Cargando modeloisor 3D/option>
-                <option value="sunset"ArchVista - V>Atardecer<>Cielo Procedimental<>Gris<>Blanco<>Negro<>Fondo<>Vista Superior<>Ortogonal<>Malla<>Arcilla<>Renderizado<>CAPAS<>Arrastrar<>Caminar<>Restablecer vista<Desplazar>Órbita<>Acercar<>Desplazar<Arrastrar derArrastrar izq>Controles<Cargando modeloisor 3D/option>
-                <option value="gradient"ArchVista - V>Gradiente Oscuro<>Atardecer<>Cielo Procedimental<>Gris<>Blanco<>Negro<>Fondo<>Vista Superior<>Ortogonal<>Malla<>Arcilla<>Renderizado<>CAPAS<>Arrastrar<>Caminar<>Restablecer vista<Desplazar>Órbita<>Acercar<>Desplazar<Arrastrar derArrastrar izq>Controles<Cargando modeloisor 3D/option>
+                <option value="black">Black</option>
+                <option value="white">White</option>
+                <option value="grey">Grey</option>
+                <option value="sky">Procedural Sky</option>
+                <option value="sunset">Sunset</option>
+                <option value="gradient">Dark Gradient</option>
             </select>
         </div>
         <div id="env-controls" class="panel">
@@ -271,15 +271,15 @@
             <input type="range" id="sun-el" min="0" max="90" value="45">
             <div class="env-row">
                 <input type="checkbox" id="toggle-shadows" checked>
-                <spanArchVista - V>Activar Sombras<>Elevación Solar<>Azimut Solar<>Gradiente Oscuro<>Atardecer<>Cielo Procedimental<>Gris<>Blanco<>Negro<>Fondo<>Vista Superior<>Ortogonal<>Malla<>Arcilla<>Renderizado<>CAPAS<>Arrastrar<>Caminar<>Restablecer vista<Desplazar>Órbita<>Acercar<>Desplazar<Arrastrar derArrastrar izq>Controles<Cargando modeloisor 3D/span>
+                <span>Enable Shadows</span>
             </div>
         </div>
     </div>
 
-    <div id="lock-hint">ArchVista - VClic para bloquear cursor↺ Restablecer← Atrás>Activar Sombras<>Elevación Solar<>Azimut Solar<>Gradiente Oscuro<>Atardecer<>Cielo Procedimental<>Gris<>Blanco<>Negro<>Fondo<>Vista Superior<>Ortogonal<>Malla<>Arcilla<>Renderizado<>CAPAS<>Arrastrar<>Caminar<>Restablecer vista<Desplazar>Órbita<>Acercar<>Desplazar<Arrastrar derArrastrar izq>Controles<Cargando modeloisor 3D — ArchVista - VEsc para liberarClic para bloquear cursor↺ Restablecer← Atrás>Activar Sombras<>Elevación Solar<>Azimut Solar<>Gradiente Oscuro<>Atardecer<>Cielo Procedimental<>Gris<>Blanco<>Negro<>Fondo<>Vista Superior<>Ortogonal<>Malla<>Arcilla<>Renderizado<>CAPAS<>Arrastrar<>Caminar<>Restablecer vista<Desplazar>Órbita<>Acercar<>Desplazar<Arrastrar derArrastrar izq>Controles<Cargando modeloisor 3D</div>
+    <div id="lock-hint">Click to lock cursor — Esc to release</div>
 
-    <button id="back-btn" onclick="window.location.href='index.html'">ArchVista - V← Atrás>Activar Sombras<>Elevación Solar<>Azimut Solar<>Gradiente Oscuro<>Atardecer<>Cielo Procedimental<>Gris<>Blanco<>Negro<>Fondo<>Vista Superior<>Ortogonal<>Malla<>Arcilla<>Renderizado<>CAPAS<>Arrastrar<>Caminar<>Restablecer vista<Desplazar>Órbita<>Acercar<>Desplazar<Arrastrar derArrastrar izq>Controles<Cargando modeloisor 3D</button>
-    <button id="reset-btn" onclick="window.resetCamera()">ArchVista - V↺ Restablecer← Atrás>Activar Sombras<>Elevación Solar<>Azimut Solar<>Gradiente Oscuro<>Atardecer<>Cielo Procedimental<>Gris<>Blanco<>Negro<>Fondo<>Vista Superior<>Ortogonal<>Malla<>Arcilla<>Renderizado<>CAPAS<>Arrastrar<>Caminar<>Restablecer vista<Desplazar>Órbita<>Acercar<>Desplazar<Arrastrar derArrastrar izq>Controles<Cargando modeloisor 3D</button>
+    <button id="back-btn" onclick="window.location.href='index.html'">← Back</button>
+    <button id="reset-btn" onclick="window.resetCamera()">↺ Reset</button>
 
     <script src="https://cdn.jsdelivr.net/npm/three@0.137.5/build/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.137.5/examples/js/controls/OrbitControls.js"></script>
