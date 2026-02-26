@@ -1,6 +1,6 @@
 (function() {
     'use strict';
-    // ── Core scene objects ──────────────────────────────────────────────────
+    // ── Objetos principales de escena ──────────────────────────────────────────────────
     let scene, renderer, orbitCamera, walkCamera, flyCamera, orthoCamera, activeCamera, orbitControls;
     let sun, hemi, fill, sky, skyUniforms;
     let cameraMode = 'orbit'; 
@@ -19,10 +19,10 @@
     let yaw = 0, pitch = 0;
     const WALK_HEIGHT = 1.7;
 
-    // ── Layers state ────────────────────────────────────────────────────────
+    // ── Objetos prinEstado de capascipales de escena ────────────────────────────────────────────────────────
     let layerMeshes = {}; // layerName -> Mesh[]
 
-    // ── Visual style ────────────────────────────────────────────────────────
+    // ── Objetos prinEstilo visualEstado de capascipales de escena ────────────────────────────────────────────────────────
     let visualStyle = 'rendered';
     const meshMatCache = {};
     const LAYER_OVERRIDES = {
@@ -37,7 +37,7 @@
         concrete: { color: 0xb0a898, roughness: 0.85, metalness: 0.0 }
     };
 
-    // ── Helpers ─────────────────────────────────────────────────────────────
+    // ── Objetos prinAuxiliaresEstilo visualEstado de capascipales de escena ─────────────────────────────────────────────────────────────
     function getModelFromQuery() {
         const p = new URLSearchParams(window.location.search);
         return p.get('model') || 'torpederas-valparaisoCLS.3dm';
