@@ -16,7 +16,7 @@
   const velocity = new THREE.Vector3();
   const damping = 0.85;
   let yaw = 0, pitch = 0;
-  const WALK_HEIGHT = 1.85; // Slightly higher to avoid terrain clipping
+  const WALK_HEIGHT = 1.85; 
   const COLLISION_DISTANCE = 0.8;
 
   // ── Visual style ────────────────────────────────────────────────────────
@@ -109,6 +109,7 @@
     velocity.set(0, 0, 0);
     updateModeUI();
   }
+  window.setCameraMode = setCameraMode; // EXPOSE TO GLOBAL
 
   function syncOrthoCamera() {
     if (!orthoCamera) return;
@@ -123,7 +124,6 @@
 
   function getGroundY(x, z) {
     if (groundMeshes.length === 0) return modelCenter.y;
-    // Cast from high above
     const origin = new THREE.Vector3(x, modelCenter.y + modelSpan * 3, z);
     raycaster.set(origin, downVec);
     const hits = raycaster.intersectObjects(groundMeshes, false);
@@ -175,14 +175,14 @@
     let ovr = null;
     Object.keys(LAYER_OVERRIDES).forEach(k => { if (!ovr && lname.indexOf(k) !== -1) ovr = LAYER_OVERRIDES[k]; });
 
-    // Try to avoid Z-fighting by disabling DoubleSide for non-transparent objects
-    const side = (ovr && ovr.transparent) ? THREE.DoubleSide : THREE.FrontSide;
+    // REVERT TO DoubleSide TO ENSURE ALL SURFACES RENDER
+    const side = THREE.DoubleSide;
     const rendParams = Object.assign({ side: side, color: hexColor, roughness: 0.75, metalness: 0.05 }, ovr || {});
     
     return {
       rendered: new THREE.MeshStandardMaterial(rendParams),
-      clay: new THREE.MeshStandardMaterial({ color: 0xd4c5b0, roughness: 0.8, metalness: 0.0, side: THREE.FrontSide }),
-      wireframe: new THREE.MeshStandardMaterial({ color: hexColor, wireframe: true }),
+      clay: new THREE.MeshStandardMaterial({ color: 0xd4c5b0, roughness: 0.8, metalness: 0.0, side: THREE.DoubleSide }),
+      wireframe: new THREE.MeshStandardMaterial({ color: hexColor, wireframe: true, side: THREE.DoubleSide }),
       xray: new THREE.MeshStandardMaterial({ color: hexColor, transparent: true, opacity: 0.2, side: THREE.DoubleSide, depthWrite: false })
     };
   }
@@ -264,8 +264,7 @@
         box.getCenter(modelCenter); box.getSize(modelSize);
         modelSpan = Math.max(modelSize.x, modelSize.y, modelSize.z) || 10;
         
-        // ── Camera planes logic ──
-        const near = Math.max(1.5, modelSpan * 0.0005);
+        const near = Math.max(0.1, modelSpan * 0.0001); // Lower near plane for better detail
         const far = modelSpan * 20;
         [orbitCamera, walkCamera, flyCamera].forEach(c => { c.near = near; c.far = far; c.updateProjectionMatrix(); });
         orthoCamera.near = near; orthoCamera.far = far;
@@ -275,6 +274,44 @@
     });
   }
 
+  function applyStyle(style) {
+    visualStyle = style;
+    document.querySelectorAll('.style-btn').forEach(b => b.classList.toggle('active', b.dataset.style === style));
+    if (!modelGroup) return;
+    modelGroup.traverse(obj => {
+      if (!obj.isMesh) return;
+      const cache = meshMatCache[obj.uuid];
+      if (cache) obj.material = cache[style] || cache.rendered;
+    });
+  }
+  window.applyStyle = applyStyle;
+
+  function rhinoColorToHex(rc) {
+    if (!rc) return 0xcccccc;
+    if (typeof rc === 'number') return rc;
+    const r = rc.r !== undefined ? rc.r : (rc[0] || 0);
+    const g = rc.g !== undefined ? rc.g : (rc[1] || 0);
+    const b = rc.b !== undefined ? rc.b : (rc[2] || 0);
+    return (r << 16) | (g << 8) | b;
+  }
+
+  function getObjAppearance(obj, layerTable) {
+    let hexColor = 0xcccccc, layerName = '', layerIndex = -1;
+    try {
+      const attrs = obj.attributes(); if (!attrs) return { hexColor, layerName, layerIndex };
+      layerIndex = attrs.layerIndex;
+      if (attrs.colorSource === 1 || attrs.colorSource === 'object') {
+        hexColor = rhinoColorToHex(attrs.objectColor || attrs.drawColor);
+      } else if (layerTable && layerIndex >= 0) {
+        try {
+          const layer = layerTable.get(layerIndex);
+          if (layer) { layerName = layer.name || ''; hexColor = rhinoColorToHex(layer.color); }
+        } catch(e) {}
+      }
+    } catch(e) {}
+    return { hexColor, layerName, layerIndex };
+  }
+
   function init() {
     scene = new THREE.Scene(); scene.background = new THREE.Color(0x050608);
     renderer = new THREE.WebGLRenderer({ antialias: true, logarithmicDepthBuffer: true });
@@ -282,11 +319,11 @@
     renderer.toneMapping = THREE.ACESFilmicToneMapping; document.body.appendChild(renderer.domElement);
 
     const aspect = window.innerWidth / window.innerHeight;
-    orbitCamera = new THREE.PerspectiveCamera(50, aspect, 1, 10000);
+    orbitCamera = new THREE.PerspectiveCamera(50, aspect, 0.1, 10000);
     orbitControls = new THREE.OrbitControls(orbitCamera, renderer.domElement); orbitControls.enableDamping = true;
-    walkCamera = new THREE.PerspectiveCamera(75, aspect, 1, 10000); walkCamera.rotation.order = 'YXZ';
-    flyCamera = new THREE.PerspectiveCamera(75, aspect, 1, 10000); flyCamera.rotation.order = 'YXZ';
-    orthoCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 1, 10000);
+    walkCamera = new THREE.PerspectiveCamera(75, aspect, 0.1, 10000); walkCamera.rotation.order = 'YXZ';
+    flyCamera = new THREE.PerspectiveCamera(75, aspect, 0.1, 10000); flyCamera.rotation.order = 'YXZ';
+    orthoCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 10000);
     activeCamera = orbitCamera;
 
     scene.add(new THREE.HemisphereLight(0xd6e4f0, 0x3a3020, 0.6));
@@ -359,23 +396,5 @@
       renderer.render(scene, activeCamera);
     })();
   }
-  
-  function getObjAppearance(obj, layerTable) {
-    let hexColor = 0xcccccc, layerName = '', layerIndex = -1;
-    try {
-      const attrs = obj.attributes(); if (!attrs) return { hexColor, layerName, layerIndex };
-      layerIndex = attrs.layerIndex;
-      if (attrs.colorSource === 1 || attrs.colorSource === 'object') {
-        hexColor = rhinoColorToHex(attrs.objectColor || attrs.drawColor);
-      } else if (layerTable && layerIndex >= 0) {
-        try {
-          const layer = layerTable.get(layerIndex);
-          if (layer) { layerName = layer.name || ''; hexColor = rhinoColorToHex(layer.color); }
-        } catch(e) {}
-      }
-    } catch(e) {}
-    return { hexColor, layerName, layerIndex };
-  }
-  
   init();
 })();
