@@ -1,136 +1,147 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ArchVista - 3D Viewer</title>
-  <style>
-    * { box-sizing: border-box; }
-    html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #050608; color: #f5f5f5; font-family: system-ui, -apple-system, sans-serif; }
-    canvas { display: block; }
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ArchVista - 3D Viewer</title>
+    <style>
+        * { box-sizing: border-box; }
+        html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #050608; color: #f5f5f5; font-family: system-ui, -apple-system, sans-serif; }
+        canvas { display: block; }
 
-    /* Loading overlay */
-    #loading { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #050608; z-index: 100; gap: 1rem; pointer-events: none; }
-    #loading.hidden { display: none; }
-    .spinner { width: 36px; height: 36px; border: 3px solid rgba(255,255,255,0.1); border-top-color: #3b82f6; border-radius: 50%; animation: spin 0.8s linear infinite; }
-    @keyframes spin { to { transform: rotate(360deg); } }
-    #loading p { margin: 0; font-size: 0.9rem; color: #9ca3af; letter-spacing: 0.02em; }
+        /* Loading overlay */
+        #loading { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #050608; z-index: 100; gap: 1rem; pointer-events: none; }
+        #loading.hidden { display: none; }
+        .spinner { width: 36px; height: 36px; border: 3px solid rgba(255,255,255,0.1); border-top-color: #3b82f6; border-radius: 50%; animation: spin 0.8s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        #loading p { margin: 0; font-size: 0.9rem; color: #9ca3af; letter-spacing: 0.02em; }
 
-    /* Controls overlay (top-left) */
-    #overlay { position: fixed; top: 10px; left: 10px; padding: 0.55rem 0.85rem; background: rgba(5,6,8,0.82); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; font-size: 0.75rem; max-width: 230px; pointer-events: none; line-height: 1.7; backdrop-filter: blur(4px); }
-    #overlay h1 { margin: 0 0 0.3rem 0; font-size: 0.82rem; font-weight: 600; color: #f5f5f5; }
-    .ctrl-row { display: flex; gap: 0.5rem; margin: 0; color: #9ca3af; }
-    .ctrl-key { color: #e5e7eb; font-weight: 500; min-width: 80px; flex-shrink: 0; }
-    .mode-indicator { margin-top: 0.4rem; padding-top: 0.4rem; border-top: 1px solid rgba(255,255,255,0.07); color: #6b7280; font-size: 0.7rem; }
-    .mode-indicator span { color: #3b82f6; font-weight: 600; }
+        /* Controls overlay (top-left) */
+        #overlay { position: fixed; top: 10px; left: 10px; padding: 0.55rem 0.85rem; background: rgba(5,6,8,0.82); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; font-size: 0.75rem; max-width: 230px; pointer-events: none; line-height: 1.7; backdrop-filter: blur(4px); }
+        #overlay h1 { margin: 0 0 0.3rem 0; font-size: 0.82rem; font-weight: 600; color: #f5f5f5; }
+        .ctrl-row { display: flex; gap: 0.5rem; margin: 0; color: #9ca3af; }
+        .ctrl-key { color: #e5e7eb; font-weight: 500; min-width: 80px; flex-shrink: 0; }
+        .mode-indicator { margin-top: 0.4rem; padding-top: 0.4rem; border-top: 1px solid rgba(255,255,255,0.07); color: #6b7280; font-size: 0.7rem; }
+        .mode-indicator span { color: #3b82f6; font-weight: 600; }
 
-    /* Style switcher (bottom-center, above cam modes) */
-    #style-modes { position: fixed; bottom: 56px; left: 50%; transform: translateX(-50%); display: flex; gap: 4px; z-index: 10; }
-    .style-btn { padding: 0.28rem 0.65rem; font-size: 0.7rem; font-weight: 500; background: rgba(10,12,20,0.85); color: #9ca3af; border: 1px solid rgba(255,255,255,0.08); border-radius: 5px; cursor: pointer; backdrop-filter: blur(4px); transition: background 0.12s, color 0.12s, border-color 0.12s; }
-    .style-btn:hover { background: rgba(30,35,60,0.95); color: #e5e7eb; }
-    .style-btn.active { background: rgba(124,58,237,0.25); color: #a78bfa; border-color: rgba(124,58,237,0.5); }
+        /* Style switcher (bottom-center) */
+        #style-modes { position: fixed; bottom: 56px; left: 50%; transform: translateX(-50%); display: flex; gap: 4px; z-index: 10; }
+        .style-btn { padding: 0.28rem 0.65rem; font-size: 0.7rem; font-weight: 500; background: rgba(10,12,20,0.85); color: #9ca3af; border: 1px solid rgba(255,255,255,0.08); border-radius: 5px; cursor: pointer; backdrop-filter: blur(4px); transition: background 0.12s, color 0.12s, border-color 0.12s; }
+        .style-btn:hover { background: rgba(30,35,60,0.95); color: #e5e7eb; }
+        .style-btn.active { background: rgba(124,58,237,0.25); color: #a78bfa; border-color: rgba(124,58,237,0.5); }
 
-    /* Camera mode buttons (bottom-center) */
-    #cam-modes { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); display: flex; gap: 6px; z-index: 10; }
-    .cam-btn { padding: 0.38rem 0.75rem; font-size: 0.75rem; font-weight: 500; background: rgba(10,12,20,0.85); color: #9ca3af; border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; cursor: pointer; backdrop-filter: blur(4px); transition: background 0.12s, color 0.12s, border-color 0.12s; }
-    .cam-btn:hover { background: rgba(30,35,60,0.95); color: #e5e7eb; }
-    .cam-btn.active { background: rgba(59,130,246,0.2); color: #60a5fa; border-color: rgba(59,130,246,0.5); }
+        /* Camera mode buttons (bottom-center) */
+        #cam-modes { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); display: flex; gap: 6px; z-index: 10; }
+        .cam-btn { padding: 0.38rem 0.75rem; font-size: 0.75rem; font-weight: 500; background: rgba(10,12,20,0.85); color: #9ca3af; border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; cursor: pointer; backdrop-filter: blur(4px); transition: background 0.12s, color 0.12s, border-color 0.12s; }
+        .cam-btn:hover { background: rgba(30,35,60,0.95); color: #e5e7eb; }
+        .cam-btn.active { background: rgba(59,130,246,0.2); color: #60a5fa; border-color: rgba(59,130,246,0.5); }
 
-    /* Back button (top-right) */
-    #back-btn { position: fixed; top: 10px; right: 10px; padding: 0.42rem 0.85rem; font-size: 0.8rem; font-weight: 500; background: rgba(10,12,20,0.85); color: #f5f5f5; border: 1px solid rgba(255,255,255,0.1); border-radius: 7px; cursor: pointer; backdrop-filter: blur(4px); transition: background 0.15s; z-index: 10; }
-    #back-btn:hover { background: rgba(25,28,50,0.95); }
+        /* Environmental controls (bottom-right) */
+        #env-controls { position: fixed; bottom: 18px; right: 10px; padding: 0.6rem 0.8rem; background: rgba(10,12,20,0.85); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; display: flex; flex-direction: column; gap: 0.6rem; z-index: 10; backdrop-filter: blur(4px); font-size: 0.72rem; min-width: 170px; }
+        #env-controls label { color: #9ca3af; display: flex; justify-content: space-between; align-items: center; }
+        #env-controls input[type="range"] { width: 100%; height: 3px; background: rgba(255,255,255,0.1); border-radius: 2px; appearance: none; cursor: pointer; margin: 4px 0; }
+        #env-controls input[type="range"]::-webkit-slider-thumb { appearance: none; width: 10px; height: 10px; background: #3b82f6; border-radius: 50%; }
+        #env-controls .env-row { display: flex; align-items: center; gap: 0.5rem; cursor: pointer; color: #9ca3af; }
 
-    /* Reset button (top-right, below back) */
-    #reset-btn { position: fixed; top: 48px; right: 10px; padding: 0.38rem 0.75rem; font-size: 0.75rem; font-weight: 500; background: rgba(10,12,20,0.85); color: #9ca3af; border: 1px solid rgba(255,255,255,0.08); border-radius: 7px; cursor: pointer; backdrop-filter: blur(4px); transition: background 0.15s; z-index: 10; }
-    #reset-btn:hover { background: rgba(25,28,50,0.95); color: #e5e7eb; }
+        /* Top-right buttons */
+        #back-btn, #reset-btn { position: fixed; right: 10px; padding: 0.4rem 0.8rem; background: rgba(10,12,20,0.85); color: #f5f5f5; border: 1px solid rgba(255,255,255,0.1); border-radius: 7px; cursor: pointer; backdrop-filter: blur(4px); z-index: 10; font-weight: 500; font-size: 0.75rem; }
+        #back-btn { top: 10px; }
+        #reset-btn { top: 46px; color: #9ca3af; }
+        #back-btn:hover, #reset-btn:hover { background: rgba(25,28,50,0.95); }
 
-    /* Pointer-lock hint */
-    #lock-hint { position: fixed; bottom: 96px; left: 50%; transform: translateX(-50%); padding: 0.35rem 0.9rem; background: rgba(0,0,0,0.7); border-radius: 20px; font-size: 0.72rem; color: #9ca3af; pointer-events: none; opacity: 0; transition: opacity 0.3s; white-space: nowrap; }
-    #lock-hint.visible { opacity: 1; }
-
-    /* Model title (top-center) */
-    #model-title { position: fixed; top: 10px; left: 50%; transform: translateX(-50%); font-size: 0.78rem; font-weight: 500; color: #6b7280; pointer-events: none; z-index: 10; letter-spacing: 0.03em; white-space: nowrap; }
-  </style>
+        #lock-hint { position: fixed; bottom: 96px; left: 50%; transform: translateX(-50%); padding: 0.35rem 0.9rem; background: rgba(0,0,0,0.7); border-radius: 20px; font-size: 0.72rem; color: #9ca3af; pointer-events: none; opacity: 0; transition: opacity 0.3s; white-space: nowrap; }
+        #lock-hint.visible { opacity: 1; }
+        #model-title { position: fixed; top: 10px; left: 50%; transform: translateX(-50%); font-size: 0.78rem; font-weight: 500; color: #6b7280; pointer-events: none; z-index: 10; letter-spacing: 0.03em; white-space: nowrap; }
+    </style>
 </head>
 <body>
-  <div id="loading">
-    <div class="spinner"></div>
-    <p>Loading model...</p>
-  </div>
-
-  <div id="model-title"></div>
-
-  <div id="overlay">
-    <h1>Controls</h1>
-    <div id="orbit-controls">
-      <div class="ctrl-row"><span class="ctrl-key">Left-drag</span><span>Orbit</span></div>
-      <div class="ctrl-row"><span class="ctrl-key">Right-drag</span><span>Pan</span></div>
-      <div class="ctrl-row"><span class="ctrl-key">Scroll</span><span>Zoom</span></div>
-      <div class="ctrl-row"><span class="ctrl-key">R</span><span>Reset view</span></div>
+    <div id="loading">
+        <div class="spinner"></div>
+        <p>Loading model...</p>
     </div>
-    <div id="walk-controls" style="display:none">
-      <div class="ctrl-row"><span class="ctrl-key">Click</span><span>Lock cursor</span></div>
-      <div class="ctrl-row"><span class="ctrl-key">W A S D</span><span>Walk</span></div>
-      <div class="ctrl-row"><span class="ctrl-key">Mouse</span><span>Look around</span></div>
-      <div class="ctrl-row"><span class="ctrl-key">Esc</span><span>Release cursor</span></div>
+    <div id="model-title"></div>
+
+    <div id="overlay">
+        <h1>Controls</h1>
+        <div id="orbit-controls">
+            <div class="ctrl-row"><span class="ctrl-key">Left-drag</span><span>Orbit</span></div>
+            <div class="ctrl-row"><span class="ctrl-key">Right-drag</span><span>Pan</span></div>
+            <div class="ctrl-row"><span class="ctrl-key">Scroll</span><span>Zoom</span></div>
+            <div class="ctrl-row"><span class="ctrl-key">R</span><span>Reset view</span></div>
+        </div>
+        <div id="walk-controls" style="display:none">
+            <div class="ctrl-row"><span class="ctrl-key">Click</span><span>Lock cursor</span></div>
+            <div class="ctrl-row"><span class="ctrl-key">W A S D</span><span>Walk</span></div>
+            <div class="ctrl-row"><span class="ctrl-key">Mouse</span><span>Look around</span></div>
+            <div class="ctrl-row"><span class="ctrl-key">Esc</span><span>Release cursor</span></div>
+        </div>
+        <div id="fly-controls" style="display:none">
+            <div class="ctrl-row"><span class="ctrl-key">Click</span><span>Lock cursor</span></div>
+            <div class="ctrl-row"><span class="ctrl-key">W A S D</span><span>Move</span></div>
+            <div class="ctrl-row"><span class="ctrl-key">Space / Shift</span><span>Up / Down</span></div>
+            <div class="ctrl-row"><span class="ctrl-key">Mouse</span><span>Look around</span></div>
+            <div class="ctrl-row"><span class="ctrl-key">Esc</span><span>Release cursor</span></div>
+        </div>
+        <div id="ortho-controls" style="display:none">
+            <div class="ctrl-row"><span class="ctrl-key">Drag</span><span>Pan</span></div>
+            <div class="ctrl-row"><span class="ctrl-key">Scroll</span><span>Zoom</span></div>
+            <div class="ctrl-row"><span class="ctrl-key">R</span><span>Reset view</span></div>
+        </div>
+        <div class="mode-indicator">Mode: <span id="mode-label">Orbit</span></div>
     </div>
-    <div id="fly-controls" style="display:none">
-      <div class="ctrl-row"><span class="ctrl-key">Click</span><span>Lock cursor</span></div>
-      <div class="ctrl-row"><span class="ctrl-key">W A S D</span><span>Move</span></div>
-      <div class="ctrl-row"><span class="ctrl-key">Space / Shift</span><span>Up / Down</span></div>
-      <div class="ctrl-row"><span class="ctrl-key">Mouse</span><span>Look around</span></div>
-      <div class="ctrl-row"><span class="ctrl-key">Esc</span><span>Release cursor</span></div>
+
+    <!-- Visual style switcher -->
+    <div id="style-modes">
+        <button class="style-btn active" data-style="rendered">Rendered</button>
+        <button class="style-btn" data-style="clay">Clay</button>
+        <button class="style-btn" data-style="wireframe">Wireframe</button>
+        <button class="style-btn" data-style="xray">X-Ray</button>
     </div>
-    <div id="ortho-controls" style="display:none">
-      <div class="ctrl-row"><span class="ctrl-key">Drag</span><span>Pan</span></div>
-      <div class="ctrl-row"><span class="ctrl-key">Scroll</span><span>Zoom</span></div>
-      <div class="ctrl-row"><span class="ctrl-key">R</span><span>Reset view</span></div>
+
+    <!-- Camera mode switcher -->
+    <div id="cam-modes">
+        <button class="cam-btn active" data-mode="orbit">1 · Orbit</button>
+        <button class="cam-btn" data-mode="walk">2 · Walk</button>
+        <button class="cam-btn" data-mode="fly">3 · Fly</button>
+        <button class="cam-btn" data-mode="ortho">4 · Top View</button>
     </div>
-    <div class="mode-indicator">Mode: <span id="mode-label">Orbit</span></div>
-  </div>
 
-  <!-- Visual style switcher -->
-  <div id="style-modes">
-    <button class="style-btn active" data-style="rendered">Rendered</button>
-    <button class="style-btn" data-style="clay">Clay</button>
-    <button class="style-btn" data-style="wireframe">Wireframe</button>
-    <button class="style-btn" data-style="xray">X-Ray</button>
-  </div>
+    <!-- Environment controls -->
+    <div id="env-controls">
+        <label>Sun Azimuth <span id="az-val">45°</span></label>
+        <input type="range" id="sun-az" min="0" max="360" value="45">
+        <label>Sun Elevation <span id="el-val">45°</span></label>
+        <input type="range" id="sun-el" min="0" max="90" value="45">
+        <div class="env-row">
+            <input type="checkbox" id="toggle-shadows" checked>
+            <span>Enable Shadows</span>
+        </div>
+    </div>
 
-  <!-- Camera mode switcher -->
-  <div id="cam-modes">
-    <button class="cam-btn active" data-mode="orbit">1 &middot; Orbit</button>
-    <button class="cam-btn" data-mode="walk">2 &middot; Walk</button>
-    <button class="cam-btn" data-mode="fly">3 &middot; Fly</button>
-    <button class="cam-btn" data-mode="ortho">4 &middot; Top View</button>
-  </div>
+    <div id="lock-hint">Click to lock cursor — Esc to release</div>
+    <button id="back-btn" onclick="window.location.href='index.html'">← Back</button>
+    <button id="reset-btn" onclick="resetCamera()">↺ Reset</button>
 
-  <div id="lock-hint">Click to lock cursor &mdash; Esc to release</div>
-  <button id="back-btn" onclick="window.location.href='index.html'">&#8592; Back</button>
-  <button id="reset-btn" onclick="resetCamera()">&#8634; Reset</button>
-
-  <script src="https://cdn.jsdelivr.net/npm/three@0.137.5/build/three.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.137.5/examples/js/controls/OrbitControls.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/rhino3dm@8.4.0/rhino3dm.min.js"></script>
-  <script src="viewer-3dm.js"></script>
-  <script>
-    // Show/hide control hints based on active camera mode
-    document.addEventListener('modchange', function(e) {
-      document.getElementById('orbit-controls').style.display = e.detail === 'orbit' ? '' : 'none';
-      document.getElementById('walk-controls').style.display = e.detail === 'walk' ? '' : 'none';
-      document.getElementById('fly-controls').style.display = e.detail === 'fly' ? '' : 'none';
-      document.getElementById('ortho-controls').style.display = e.detail === 'ortho' ? '' : 'none';
-      const hint = document.getElementById('lock-hint');
-      hint.classList.toggle('visible', e.detail === 'walk' || e.detail === 'fly');
-    });
-    // Show model name in title bar
-    (function() {
-      const p = new URLSearchParams(window.location.search);
-      const m = p.get('model') || '';
-      const name = m.replace(/\.3dm$/i, '').replace(/[-_]/g, ' ');
-      const el = document.getElementById('model-title');
-      if (el && name) el.textContent = name;
-    })();
-  </script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.137.5/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.137.5/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/rhino3dm@8.4.0/rhino3dm.min.js"></script>
+    <script src="viewer-3dm.js"></script>
+    <script>
+        document.addEventListener('modchange', function(e) {
+            document.getElementById('orbit-controls').style.display = e.detail === 'orbit' ? '' : 'none';
+            document.getElementById('walk-controls').style.display = e.detail === 'walk' ? '' : 'none';
+            document.getElementById('fly-controls').style.display = e.detail === 'fly' ? '' : 'none';
+            document.getElementById('ortho-controls').style.display = e.detail === 'ortho' ? '' : 'none';
+            const hint = document.getElementById('lock-hint');
+            hint.classList.toggle('visible', e.detail === 'walk' || e.detail === 'fly');
+        });
+        (function() {
+            const p = new URLSearchParams(window.location.search);
+            const m = p.get('model') || '';
+            const name = m.replace(/\.3dm$/i, '').replace(/[-_]/g, ' ');
+            const el = document.getElementById('model-title');
+            if (el && name) el.textContent = name;
+        })();
+    </script>
 </body>
 </html>
