@@ -4,16 +4,16 @@
     "name": "Playa Las Torpederas, Valparaíso",
     "file": "torpederas-valparaisoCLS.3dm",
     "description": "Recorrido del cable Curie desde la playa Las Torpederas hasta el Valparaíso Cable Landing Station",
-    "category": "Sitio",
+    "category": "site",
     "size": "~16 MB",
     "thumbnail": ""
   },
   {
     "id": "new-building",
-    "name": "Your New Building",
+    "name": "Cable Humboldt",
     "file": "cables3d.3dm",
-    "description": "Cable Humaboldt",
-    "category": "Máquina",
+    "description": "Cable Humaboldt comparado a escala humana",
+    "category": "building",
     "size": "~10 MB",
     "thumbnail": "thumbnails/new-building.jpg"
   }
