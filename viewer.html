@@ -100,7 +100,38 @@
             #layers-body { max-height: 35vh; }
 
             /* Hide heavy env controls on mobile */
-            #side-controls { display: none; }
+            /* Env controls: show as ⚙ button at bottom-right */
+            #side-controls {
+                bottom: 88px;
+                right: 8px;
+                width: auto;
+                max-width: 40px;
+                overflow: hidden;
+                transition: max-width 0.3s, max-height 0.3s;
+            }
+            /* Collapsed state: just show first .panel as icon button */
+            #side-controls .panel:first-child::before {
+                content: '⚙';
+                display: block;
+                font-size: 1.2rem;
+                text-align: center;
+                padding: 0.4rem;
+            }
+            #side-controls .panel:first-child > * { display: none; }
+            /* Expanded state: tap to reveal */
+            #side-controls:focus-within,
+            #side-controls:hover {
+                max-width: 200px;
+                max-height: 400px;
+            }
+            #side-controls:focus-within .panel:first-child > *,
+            #side-controls:hover .panel:first-child > * {
+                display: block;
+            }
+            #side-controls:focus-within .panel:first-child::before,
+            #side-controls:hover .panel:first-child::before {
+                display: none;
+            }
 
             /* Style buttons — compact strip above camera buttons */
             #style-modes {
