@@ -1,10 +1,10 @@
 [
   {
     "id": "torpederas-valparaisoCLS",
-    "name": "Torpederas de Valparaíso",
+    "name": "Playa Las Torpederas, Valparaíso",
     "file": "torpederas-valparaisoCLS.3dm",
-    "description": "Coastal terrain and naval historical complex in Valparaíso, Chile.",
-    "category": "site",
+    "description": "Recorrido del cable Curie desde la playa Las Torpederas hasta el Valparaíso Cable Landing Station",
+    "category": "Sitio",
     "size": "~16 MB",
     "thumbnail": ""
   },
@@ -12,8 +12,8 @@
     "id": "new-building",
     "name": "Your New Building",
     "file": "cables3d.3dm",
-    "description": "Description here",
-    "category": "building",
+    "description": "Cable Humaboldt",
+    "category": "Máquina",
     "size": "~10 MB",
     "thumbnail": "thumbnails/new-building.jpg"
   }
