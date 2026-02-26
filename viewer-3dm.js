@@ -280,10 +280,23 @@
             return;
         }
         names.forEach(name => {
-            const row = document.createElement('label'); row.className = 'layer-row';
-            const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = true;
+            const row = document.createElement('div');
+            row.className = 'layer-row';
+            const span = document.createElement('span');
+            span.className = 'layer-name';
+            span.textContent = name;
+            const lbl = document.createElement('label');
+            lbl.className = 'toggle-switch';
+            const cb = document.createElement('input');
+            cb.type = 'checkbox';
+            cb.checked = true;
             cb.onchange = () => { if (layerMeshes[name]) layerMeshes[name].forEach(m => m.visible = cb.checked); };
-            row.appendChild(cb); row.appendChild(document.createTextNode(name));
+            const track = document.createElement('span');
+            track.className = 'toggle-track';
+            lbl.appendChild(cb);
+            lbl.appendChild(track);
+            row.appendChild(span);
+            row.appendChild(lbl);
             list.appendChild(row);
         });
     }
