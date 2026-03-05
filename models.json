@@ -6,7 +6,14 @@
     "description": "Recorrido del cable Curie desde la playa Las Torpederas hasta el Valparaíso Cable Landing Station",
     "category": "site",
     "size": "~16 MB",
-    "thumbnail": ""
+    "thumbnail": "",
+    "uiConfig": {
+      "cameraModes": ["orbit", "walk", "fly", "ortho"],
+      "visualStyles": ["rendered", "clay", "wireframe", "xray"],
+      "showLayers": true,
+      "showLighting": true,
+      "showShadows": true
+    }
   },
   {
     "id": "cable1",
@@ -15,7 +22,14 @@
     "description": "Cable Humaboldt comparado a escala humana",
     "category": "building",
     "size": "~10 MB",
-    "thumbnail": "thumbnails/new-building.jpg"
+    "thumbnail": "thumbnails/new-building.jpg",
+    "uiConfig": {
+      "cameraModes": ["orbit", "ortho"],
+      "visualStyles": ["rendered", "clay", "xray"],
+      "showLayers": false,
+      "showLighting": true,
+      "showShadows": true
+    }
   },
   {
     "id": "plano1",
@@ -24,7 +38,13 @@
     "description": "...",
     "category": "building",
     "size": "~10 MB",
-    "thumbnail": "thumbnails/new-building.jpg"
+    "thumbnail": "thumbnails/new-building.jpg",
+    "uiConfig": {
+      "cameraModes": ["ortho"],
+      "visualStyles": ["rendered"],
+      "showLayers": true,
+      "showLighting": false,
+      "showShadows": false
+    }
   }
-
 ]
