@@ -406,9 +406,11 @@
         return group;
     }
 
-    function loadModel() {
-        const name = getModelFromQuery();
-        showLoading('Loading ' + name + '...');
+    async function loadModel() {
+    const name = getModelFromQuery();
+    showLoading('Loading ' + name + '...');    
+    // Cargar configuración del modelo
+    modelConfig = await loadModelConfig();
         rhino3dm().then(async rhino => {
             try {
                 const res = await fetch('models/' + name);
@@ -427,7 +429,7 @@
                 is2DModel = groundMeshes.length === 0;
                 resetCamera(); syncOrthoCamera();
                 setCameraMode(is2DModel ? 'ortho' : 'orbit');
-                updateLayersUI(); applyStyle(visualStyle); updateSun(); hideLoading();
+                updateLayersUI(); applyStyle(visualStyle); updateSun(); hideLoading();applyUIConfig(modelConfig);
             } catch(e) { console.error(e); showLoading('Error: ' + e.message); }
         });
     }
