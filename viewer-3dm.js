@@ -432,6 +432,65 @@
         });
     }
 
+    async function loadModelConfig() {
+    const modelName = getModelFromQuery();
+    try {
+        const res = await fetch('models.json');
+        if (!res.ok) return null;
+        const models = await res.json();
+        const model = models.find(m => m.file === modelName);
+        return model?.uiConfig || null;
+    } catch(e) {
+        console.warn('Could not load model config:', e);
+        return null;
+    }
+}
+
+    function applyUIConfig(config) {
+    if (!config) return;
+    
+    if (config.cameraModes) {
+        document.querySelectorAll('.cam-btn[data-mode]').forEach(btn => {
+            const mode = btn.dataset.mode;
+            if (!config.cameraModes.includes(mode)) {
+                btn.style.display = 'none';
+            }
+        });
+    }
+    
+    if (config.visualStyles) {
+        document.querySelectorAll('.style-btn').forEach(btn => {
+            const style = btn.dataset.style;
+            if (!config.visualStyles.includes(style)) {
+                btn.style.display = 'none';
+            }
+        });
+        if (config.visualStyles.length === 0) {
+            const panel = document.getElementById('style-modes');
+            if (panel) panel.style.display = 'none';
+        }
+    }
+    
+    if (config.showLayers === false) {
+        const panel = document.getElementById('layers-panel');
+        if (panel) panel.style.display = 'none';
+    }
+    
+    if (config.showLighting === false) {
+        const envControls = document.getElementById('env-controls');
+        if (envControls) envControls.style.display = 'none';
+    }
+    
+    if (config.showShadows === false) {
+        const shadowToggle = document.getElementById('toggle-shadows');
+        if (shadowToggle) {
+            shadowToggle.checked = false;
+            shadowToggle.parentElement.style.display = 'none';
+        }
+        toggleShadows(false);
+    }
+}
+
     function init() {
         scene = new THREE.Scene();
         renderer = new THREE.WebGLRenderer({ antialias: true, logarithmicDepthBuffer: true });
