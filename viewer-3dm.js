@@ -18,6 +18,7 @@
     const damping = 0.85;
     let yaw = 0, pitch = 0;
     const WALK_HEIGHT = 1.7;
+        let modelConfig = null;
 
     // ── Layers state ────────────────────────────────────────────────────────
     let layerMeshes = {}; // layerName -> Mesh[]
