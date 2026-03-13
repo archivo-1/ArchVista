@@ -2,15 +2,11 @@
     'use strict';
     // ── Core scene objects ──────────────────────────────────────────────────
     let scene, renderer, orbitCamera, walkCamera, flyCamera, orthoCamera, activeCamera, orbitControls;
-  let labelRenderer, css3dScene;
-    let sun, hemi, fill, sky, skyUniforms;
     let cameraMode = 'orbit'; 
     let isOrthoOrbit = false;
     let is2DModel = false;
     let modelGroup = null;
     let groundMeshes = [];
-  let labels = [];
-    let modelCenter = new THREE.Vector3();
     let modelSize = new THREE.Vector3();
     let modelSpan = 10;
     const raycaster = new THREE.Raycaster();
@@ -42,31 +38,6 @@
 
     // ── Helpers ─────────────────────────────────────────────────────────────
 
-  // Function to add a CSS3D label
-  function addLabel(text, position, options = {}) {
-    const div = document.createElement('div');
-    div.className = 'label';
-    div.textContent = text;
-    div.style.marginTop = '-1em';
-    div.style.backgroundColor = options.backgroundColor || 'rgba(0, 0, 0, 0.7)';
-    div.style.color = options.color || '#ffffff';
-    div.style.padding = options.padding || '5px 10px';
-    div.style.borderRadius = options.borderRadius || '5px';
-    div.style.fontSize = options.fontSize || '14px';
-    div.style.pointerEvents = 'none';
-
-    const label = new THREE.CSS3DObject(div);
-    label.position.copy(position);
-    css3dScene.add(label);
-    labels.push(label);
-    return label;
-  }
-
-  // Function to remove all labels
-  function clearLabels() {
-    labels.forEach(label => css3dScene.remove(label));
-    labels = [];
-  }
     function getModelFromQuery() {
         const p = new URLSearchParams(window.location.search);
         return p.get('model') || 'torpederas-valparaisoCLS.3dm';
@@ -530,14 +501,6 @@
         document.body.appendChild(renderer.domElement);
 
 
-    // CSS3D Renderer for labels
-    css3dScene = new THREE.Scene();
-    labelRenderer = new THREE.CSS3DRenderer();
-    labelRenderer.setSize(window.innerWidth, window.innerHeight);
-    labelRenderer.domElement.style.position = 'absolute';
-    labelRenderer.domElement.style.top = '0';
-    labelRenderer.domElement.style.pointerEvents = 'none';
-    document.body.appendChild(labelRenderer.domElement);
         const aspect = window.innerWidth / window.innerHeight;
         orbitCamera = new THREE.PerspectiveCamera(50, aspect, 0.1, 1000000);
         orbitControls = new THREE.OrbitControls(orbitCamera, renderer.domElement);
@@ -555,7 +518,6 @@
 
         window.addEventListener('resize', () => {
             renderer.setSize(window.innerWidth, window.innerHeight);
-        labelRenderer.setSize(window.innerWidth, window.innerHeight);
             const a = window.innerWidth / window.innerHeight;
             orbitCamera.aspect = walkCamera.aspect = flyCamera.aspect = a;
             orbitCamera.updateProjectionMatrix(); walkCamera.updateProjectionMatrix(); flyCamera.updateProjectionMatrix();
@@ -608,7 +570,6 @@
                 const next = flyCamera.position.clone().add(velocity); if (!checkCollision(next, rad)) flyCamera.position.copy(next); else velocity.set(0,0,0);
             } else if (cameraMode === 'orbit') orbitControls.update();
             renderer.render(scene, activeCamera);
-        labelRenderer.render(css3dScene, activeCamera);
         })();
     }
     init();
