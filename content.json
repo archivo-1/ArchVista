@@ -1,0 +1,50 @@
+[
+  {
+    "id": "torpederas-valparaisoCLS",
+    "nombre": "Playa Las Torpederas, Valparaíso CL",
+    "archivo": "torpederasValparaisoCL.3dm",
+    "descripcion": "Recorrido del camino costero de Las Torpederas",
+    "categoria": "modelo-3d",
+    "tamano": "~16 MB",
+    "thumbnail": "",
+    "uiConfig": {
+      "cameraModes": ["orbit", "walk"],
+      "visualStyles": ["rendered", "wireframe"],
+      "showLayers": true,
+      "showLighting": true,
+      "showShadows": true
+    }
+  },
+  {
+    "id": "cable1",
+    "nombre": "Cable Humboldt",
+    "archivo": "cables3d.3dm",
+    "descripcion": "Cable Humboldt para exploración oceanográfica",
+    "categoria": "modelo-3d",
+    "tamano": "~10 MB",
+    "thumbnail": "thumbnails/new-building.png",
+    "uiConfig": {
+      "cameraModes": ["orbit", "ortho"],
+      "visualStyles": ["rendered", "wireframe"],
+      "showLayers": false,
+      "showLighting": true,
+      "showShadows": true
+    }
+  },
+  {
+    "id": "plano1",
+    "nombre": "Mapa de cables submarinos",
+    "archivo": "mapamundi1.3dm",
+    "descripcion": "...",
+    "categoria": "modelo-3d",
+    "tamano": "~10 MB",
+    "thumbnail": "thumbnails/new-building.png",
+    "uiConfig": {
+      "cameraModes": ["ortho"],
+      "visualStyles": ["rendered"],
+      "showLayers": true,
+      "showLighting": false,
+      "showShadows": false
+    }
+  }
+]
