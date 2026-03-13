@@ -169,7 +169,7 @@
         });
     }
 
-    function function updateCounts() {
+        function updateCounts() {
         // Contar 'Todo'
         const totalCount = MODELS.length;
         const allEl = document.getElementById('count-all');
@@ -195,7 +195,7 @@
         const grid = document.getElementById('grid');
         const visible = MODELS.filter(m => {
             const matchesCategory = (activeFilter === 'all' || m.category === activeFilter);
-            const matchesSearch = !searchQuery || (m.name + ' ' + (m.description || '')).toLowerCase().includes(searchQuery.toLowerCase());
+                        const matchesSearch = !searchQuery || (m.nombre + ' ' + (m.descripcion || '')).toLowerCase().includes(searchQuery.toLowerCase());
             return matchesCategory && matchesSearch;
         });
         
