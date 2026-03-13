@@ -24,6 +24,7 @@
     // ── Visual style ────────────────────────────────────────────────────────
     let visualStyle = 'rendered';
     const meshMatCache = {};
+    let sun, fill, sky, skyUniforms, modelCenter = new THREE.Vector3();
     const LAYER_OVERRIDES = {
         glass: { color: 0xadd8f7, roughness: 0.05, metalness: 0.1, transparent: true, opacity: 0.35 },
         window: { color: 0xadd8f7, roughness: 0.05, metalness: 0.1, transparent: true, opacity: 0.35 },
