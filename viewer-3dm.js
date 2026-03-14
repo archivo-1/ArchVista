@@ -413,7 +413,7 @@
     modelConfig = await loadModelConfig();
         rhino3dm().then(async rhino => {
             try {
-                const res = await fetch('models/' + name);
+                                const res = await fetch(name);
                 if (!res.ok) throw new Error('Model not found');
                 const doc = rhino.File3dm.fromByteArray(new Uint8Array(await res.arrayBuffer()));
                 const group = processDocObjects(doc, rhino, document.getElementById('toggle-shadows').checked);
