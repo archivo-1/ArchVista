@@ -41,7 +41,7 @@
 
     function getModelFromQuery() {
         const p = new URLSearchParams(window.location.search);
-        return p.get('model') || 'torpederas-valparaisoCLS.3dm';
+        return p.get('file') || 'torpederas-valparaisoCLS.3dm';
     }
     function showLoading(msg) {
         const el = document.getElementById('loading');
