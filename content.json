@@ -35,7 +35,7 @@
     "id": "plano1",
     "nombre": "Mapa de cables submarinos",
     "archivo": "mapamundi1.3dm",
-    "descripcion": "...",
+    "descripcion": "Planimetría de cables submarinos globales",
     "categoria": "modelo-3d",
     "tamano": "~10 MB",
     "thumbnail": "thumbnails/new-building.png",
@@ -46,5 +46,32 @@
       "showLighting": false,
       "showShadows": false
     }
+  },
+  {
+    "id": "mosacat-pdf",
+    "nombre": "Documento Mosacat",
+    "archivo": "pdf/Mosacat.pdf",
+    "descripcion": "Documento PDF Mosacat",
+    "categoria": "pdf",
+    "tamano": "",
+    "thumbnail": ""
+  },
+  {
+    "id": "test-video",
+    "nombre": "Video de Prueba",
+    "archivo": "video/test_video.mp4",
+    "descripcion": "Video de demostración",
+    "categoria": "video",
+    "tamano": "",
+    "thumbnail": ""
+  },
+  {
+    "id": "archivo-nubes",
+    "nombre": "Archivo de Nubes",
+    "archivo": "https://archivo-1.github.io/archivodenubes/",
+    "descripcion": "Proyecto anterior: Archivo de Nubes",
+    "categoria": "enlace",
+    "tamano": "",
+    "thumbnail": ""
   }
 ]
