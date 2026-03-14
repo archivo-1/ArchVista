@@ -1,1 +1,124 @@
-Agregar visor multimedia universal (video/PDF/imagen/audio)
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ArchVista - Visor</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background: #050608;
+            color: #e5e7eb;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        header {
+            padding: 1rem 2rem;
+            border-bottom: 1px solid rgba(255,255,255,0.07);
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
+        }
+        header a {
+            color: #93c5fd;
+            text-decoration: none;
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        h1 {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #f9fafb;
+        }
+        #viewer-container {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+        }
+        #content {
+            width: 100%;
+            height: 100%;
+            max-width: 1400px;
+            max-height: 900px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        video, iframe, img, embed {
+            max-width: 100%;
+            max-height: 100%;
+            border: none;
+            border-radius: 8px;
+        }
+        .loading {
+            color: #6b7280;
+            font-size: 1rem;
+        }
+        .error {
+            color: #f87171;
+            text-align: center;
+            padding: 2rem;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <a href="index.html">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M19 12H5M12 19l-7-7 7-7"/>
+            </svg>
+            Volver
+        </a>
+        <h1 id="title">Cargando...</h1>
+    </header>
+    <div id="viewer-container">
+        <div id="content" class="loading">Cargando contenido...</div>
+    </div>
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const itemId = urlParams.get('id');
+        
+        if (!itemId) {
+            document.getElementById('content').innerHTML = '<p class="error">No se especificó un ID de contenido</p>';
+        } else {
+            fetch('content.json')
+                .then(res => res.json())
+                .then(items => {
+                    const item = items.find(i => i.id === itemId);
+                    if (!item) {
+                        document.getElementById('content').innerHTML = '<p class="error">Contenido no encontrado</p>';
+                        return;
+                    }
+                    
+                    document.getElementById('title').textContent = item.nombre;
+                    const container = document.getElementById('content');
+                    const ext = item.archivo.split('.').pop().toLowerCase();
+                    
+                    if (item.categoria === 'pdf' || ext === 'pdf') {
+                        container.innerHTML = `<iframe src="${item.archivo}" width="100%" height="800"></iframe>`;
+                    } else if (item.categoria === 'video' || ['mp4', 'webm', 'ogg'].includes(ext)) {
+                        container.innerHTML = `<video controls width="100%" style="max-height: 800px;"><source src="${item.archivo}" type="video/${ext}">Tu navegador no soporta video.</video>`;
+                    } else if (item.categoria === 'galeria' || ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext)) {
+                        container.innerHTML = `<img src="${item.archivo}" alt="${item.nombre}" style="max-width: 100%; max-height: 800px; object-fit: contain;">`;
+                    } else if (item.categoria === 'audio' || ['mp3', 'wav', 'ogg'].includes(ext)) {
+                        container.innerHTML = `<audio controls style="width: 100%; max-width: 600px;"><source src="${item.archivo}" type="audio/${ext}">Tu navegador no soporta audio.</audio>`;
+                    } else if (item.categoria === 'enlace') {
+                        container.innerHTML = `<iframe src="${item.archivo}" width="100%" height="800" style="background: white;"></iframe>`;
+                    } else {
+                        container.innerHTML = '<p class="error">Formato no soportado</p>';
+                    }
+                })
+                .catch(err => {
+                    console.error(err);
+                    document.getElementById('content').innerHTML = '<p class="error">Error al cargar el contenido</p>';
+                });
+        }
+    </script>
+</body>
+</html>
