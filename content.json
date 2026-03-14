@@ -2,7 +2,7 @@
   {
     "id": "torpederas-valparaisoCLS",
     "nombre": "Playa Las Torpederas, Valparaíso CL",
-        "archivo": "models/torpederasValparaisoCL.3dm",
+        "archivo": "torpederasValparaisoCL.3dm",
     "descripcion": "Recorrido del camino costero de Las Torpederas",
     "categoria": "modelo-3d",
     "tamano": "~16 MB",
@@ -18,7 +18,7 @@
   {
     "id": "cable1",
     "nombre": "Cable Humboldt",
-        "archivo": "models/cables3d.3dm",
+        "archivo": "cables3d.3dm",
     "descripcion": "Cable Humboldt para exploración oceanográfica",
     "categoria": "modelo-3d",
     "tamano": "~10 MB",
@@ -34,7 +34,7 @@
   {
     "id": "plano1",
     "nombre": "Mapa de cables submarinos",
-        "archivo": "models/mapamundi1.3dm",
+        "archivo": "mapamundi1.3dm",
     "descripcion": "Planimetría de cables submarinos globales",
     "categoria": "modelo-3d",
     "tamano": "~10 MB",
